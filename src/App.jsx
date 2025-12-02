@@ -14,21 +14,28 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.onerror = error => reject(error);
 });
 
-// TL ve USD Yan Yana Gösteren Fonksiyon
+// --- PARA BİRİMİ FORMATI (DÜZELTİLDİ: Çift Simgeyi Önler) ---
+const formatCurrency = (value, currency = 'TRY') => {
+  if (value === undefined || value === null) return '-';
+  // Eğer değer zaten bir string ise ve '₺' içeriyorsa direkt döndür (Çift simgeyi önle)
+  if (typeof value === 'string' && (value.includes('₺') || value.includes('$'))) return value;
+  
+  return Number(value).toLocaleString('tr-TR', { 
+    style: 'currency', 
+    currency: currency,
+    maximumFractionDigits: 2 
+  });
+};
+
 const formatDualCurrency = (tlValue, usdValue) => {
-  const tl = Number(tlValue || 0).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' });
-  const usd = usdValue ? Number(usdValue).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : null;
+  const tl = formatCurrency(tlValue, 'TRY');
+  const usd = usdValue ? formatCurrency(usdValue, 'USD') : null;
   return (
     <div className="flex flex-col">
       <span className="font-bold text-gray-800">{tl}</span>
       {usd && <span className="text-xs text-gray-500">{usd}</span>}
     </div>
   );
-};
-
-const formatCurrency = (value, currency = 'TRY') => {
-  if (value === undefined || value === null) return '-';
-  return Number(value).toLocaleString('tr-TR', { style: 'currency', currency: currency });
 };
 
 const Login = () => {
@@ -76,7 +83,7 @@ const Dashboard = ({ session }) => {
 
   const CONFIG = {
     cost: { title: 'Maliyet Analizi', desc: 'Ürün bazlı karlılık ve gider analizi.', url: 'https://n8n.lolie.com.tr/webhook/maliyet-analizi', color: 'blue' },
-    dead: { title: 'Ölü Stok Analizi', desc: '30+ gündür satılmayan ürünler.', url: 'https://n8n.lolie.com.tr/webhook/deadstock', color: 'red' },
+    dead: { title: 'Ölü Stok Analizi', desc: 'Satılmayan ürünler ve Gider Raporu.', url: 'https://n8n.lolie.com.tr/webhook/deadstock', color: 'red' },
     stockout: { title: 'Stok Tükenme Riski', desc: 'Kritik seviyedeki ürünler.', url: 'https://n8n.lolie.com.tr/webhook/stockout-api', color: 'amber' },
     cargo: { title: 'Kargo Kaçağı', desc: 'Sistemsel kargo tutarsızlıkları.', url: 'https://n8n.lolie.com.tr/webhook/analiz-baslat', color: 'purple' },
     ocr: { title: 'Fatura OCR', desc: 'Fatura görselinden veri ayıklama.', url: 'https://n8n.lolie.com.tr/webhook/fatura-analiz', color: 'indigo' },
@@ -200,8 +207,8 @@ const Dashboard = ({ session }) => {
                    <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                          <StatCard label="Oran" value={`%${(data.stats.ratio*100).toFixed(1)}`} color="blue" />
-                         <StatCard label="Gider" value={`₺${formatCurrency(data.stats.totalExp)}`} />
-                         <StatCard label="Ciro" value={`₺${formatCurrency(data.stats.totalRev)}`} />
+                         <StatCard label="Gider" value={formatCurrency(data.stats.totalExp)} />
+                         <StatCard label="Ciro" value={formatCurrency(data.stats.totalRev)} />
                       </div>
                       <div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">SKU</th><th className="p-4">Ürün</th><th className="p-4">Ham Mal.</th><th className="p-4">Yüklü Mal.</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{data.rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4 font-medium">{row.sku}</td><td className="p-4">{row.name}</td><td className="p-4">{formatDualCurrency(row.cost, row.usd_cost)}</td><td className="p-4">{formatDualCurrency(row.loaded_cost, row.usd_loaded_cost)}</td></tr>))}</tbody></table></div>
                    </div>
@@ -212,26 +219,23 @@ const Dashboard = ({ session }) => {
                    <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
                       <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex flex-col sm:flex-row justify-between items-center border border-red-100 text-center sm:text-left">
                          <span className="font-semibold">Toplam Bağlı Sermaye</span>
-                         <div className="flex flex-col items-end"><span className="text-2xl font-bold">₺{formatCurrency(data.totalCapital)}</span><span className="text-sm opacity-75">${formatCurrency(data.totalCapitalUSD, 'USD')}</span></div>
+                         <div className="flex flex-col items-end"><span className="text-2xl font-bold">{formatCurrency(data.totalCapital)}</span><span className="text-sm opacity-75">{formatCurrency(data.totalCapitalUSD, 'USD')}</span></div>
                       </div>
-                      {/* GÜNCELLENEN TABLO: Tutar Sütununda Dolar Eklendi */}
                       <div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">KOD</th><th className="p-4">ÜRÜN</th><th className="p-4">ADET</th><th className="p-4">TUTAR</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{data.list?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4">{row.kod}</td><td className="p-4">{row.urun_adi}</td><td className="p-4">{row.adet}</td><td className="p-4">{formatDualCurrency(row.bagli_para, row.usd_bagli_para)}</td></tr>))}</tbody></table></div>
-                      
-                      {/* ÖLÜ STOK TAVSİYESİ BURAYA EKLENDİ */}
-                      {data.advice && (
-                        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                           <h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> CFO Tavsiyesi</h4>
-                           <div className="text-sm text-yellow-900 whitespace-pre-wrap">{data.advice}</div>
-                        </div>
-                      )}
+                      {data.advice && (<div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"><h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> CFO Tavsiyesi</h4><div className="text-sm text-yellow-900 whitespace-pre-wrap">{data.advice}</div></div>)}
                    </div>
                 )}
 
-                {/* 3. STOCKOUT */}
+                {/* 3. STOCKOUT (GÜNCELLENEN TABLO BAŞLIKLARI) */}
                 {activeTab === 'stockout' && (
                   <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
                      <div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6 text-sm" />
-                     <SimpleTable headers={['SKU', 'Ürün', 'Gün', 'Acil']} rows={data.stockoutList} keys={['kod', 'urun_adi', 'gun', 'aciliyet']} />
+                     {/* TABLO BAŞLIKLARI VE SÜTUNLARI ZENGİNLEŞTİRİLDİ */}
+                     <SimpleTable 
+                       headers={['SKU', 'Ürün', 'Mevcut Stok', 'Günlük Hız', 'Tahmini Bitiş', 'Aciliyet']} 
+                       rows={data.stockoutList} 
+                       keys={['kod', 'urun_adi', 'stok', 'hiz', 'gun', 'aciliyet']} 
+                     />
                   </div>
                 )}
 
@@ -239,45 +243,27 @@ const Dashboard = ({ session }) => {
                 {activeTab === 'cargo' && (
                    <div className="space-y-6">
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                          <div className="flex items-center gap-4"><div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div><div><p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p><h3 className="text-2xl font-bold text-red-600">₺{formatCurrency(cargoData.totalLoss)}</h3></div></div>
+                          <div className="flex items-center gap-4"><div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div><div><p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p><h3 className="text-2xl font-bold text-red-600">{formatCurrency(cargoData.totalLoss)}</h3></div></div>
                           <div className="relative w-full md:w-64"><Search className="absolute left-3 top-2.5 text-gray-400" size={18} /><input type="text" placeholder="Filtrele..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} /></div>
                       </div>
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><h3 className="font-bold text-gray-800 mb-4 text-sm md:text-base">Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3><SimpleTable headers={['Sipariş', 'Firma', 'Desi', 'Fark']} rows={cargoData.filtered} keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} /></div>
                    </div>
                 )}
 
-                {/* 5. OCR, 6. BULK Standart */}
+                {/* DİĞERLERİ */}
                 {activeTab === 'ocr' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm border"><h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Veriler</h3><div className="space-y-3"><DetailRow label="Satıcı" value={data['Satıcı Adı']} /><DetailRow label="Tarih" value={data['Tarih']} /><DetailRow label="Fatura No" value={data['Fatura No']} /><DetailRow label="Tutar" value={data['Toplam Tutar']} highlight /></div></div><div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100"><h3 className="font-bold text-indigo-800 mb-2">Vergi Analizi</h3><p className="text-sm text-indigo-600 mb-4">{data['Aciklama']}</p><div className="bg-white p-4 rounded-lg shadow-sm"><div className="flex justify-between mb-2"><span>Matrah:</span> <b>{data['Mal Hizmet Tutarı']}</b></div><div className="flex justify-between"><span>KDV:</span> <b>{data['KDV Tutarı']}</b></div></div></div></div>}
                 {activeTab === 'bulk' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-8 text-center"><div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div><h2 className="text-2xl font-bold text-gray-800 mb-2">Tamamlandı</h2><p className="text-gray-500 mb-8">Veriler aktarıldı.</p><div className="grid grid-cols-3 gap-4 max-w-lg mx-auto"><StatCard label="Toplam" value={data.stats.total} /><StatCard label="Eklenen" value={data.stats.added} color="green" /><StatCard label="Mükerrer" value={data.stats.duplicates} color="red" /></div></div>}
-
-                {/* 7. VERGİ + CFO RAPORU (BURAYA TAŞINDI) */}
                 {activeTab === 'tax' && (
                   <div className="space-y-6">
                     {data.tahminiAySonuCiro !== undefined && (
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4"><h3 className="font-bold text-gray-800 text-lg">Vergi Projeksiyonu</h3><a href={`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${data.fileBase64 || ''}`} download={`${data.fileName || 'Rapor'}.xlsx`} className="w-full sm:w-auto flex justify-center items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"><Download size={16} /> İndir</a></div>
-                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4"><StatCard label="Tahmini Ciro" value={`₺${formatCurrency(data.tahminiAySonuCiro)}`} /><StatCard label="Hesaplanan KDV" value={`₺${formatCurrency(data.tahminiHesaplananKDV)}`} color="red" /><StatCard label="(-) Devr. KDV" value={`₺${formatCurrency(data.devredenKDV)}`} color="blue" /><StatCard label="Ödenecek KDV" value={`₺${formatCurrency(data.odenecekKDV)}`} color="orange" /><StatCard label="Güvenli Liman" value={`₺${formatCurrency(data.guvenliLiman)}`} color="green" /></div>
+                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4"><StatCard label="Tahmini Ciro" value={formatCurrency(data.tahminiAySonuCiro)} /><StatCard label="Hesaplanan KDV" value={formatCurrency(data.tahminiHesaplananKDV)} color="red" /><StatCard label="(-) Devr. KDV" value={formatCurrency(data.devredenKDV)} color="blue" /><StatCard label="Ödenecek KDV" value={formatCurrency(data.odenecekKDV)} color="orange" /><StatCard label="Güvenli Liman" value={formatCurrency(data.guvenliLiman)} color="green" /></div>
                       </div>
                     )}
-                    
-                    {/* CFO Raporu Bölümü (AKILLI VERGİ İÇİNDE) */}
-                    <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
-                       <div className="flex justify-between items-center mb-4">
-                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileBarChart size={20}/> CFO Gider Raporu</h3>
-                         <button onClick={fetchCfoReport} disabled={cfoLoading} className="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200">{cfoLoading ? 'Yükleniyor...' : 'Raporu Getir'}</button>
-                       </div>
-                       {cfoReport ? (
-                         <div className="space-y-4">
-                           {/* HTML Olarak Göster (dangerouslySetInnerHTML) */}
-                           <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: cfoReport[0]?.data_summary }}></div>
-                           <SimpleTable headers={['Kategori', 'İşlem', 'Tutar', 'KDV']} rows={cfoReport} keys={['Kategori', 'İşlem Adedi', 'Toplam Tutar', 'KDV Tutarı']} />
-                         </div>
-                       ) : <p className="text-sm text-gray-400">Detaylı gider analizi için butona basın.</p>}
-                     </div>
+                    <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileBarChart size={20}/> CFO Gider Raporu</h3><button onClick={fetchCfoReport} disabled={cfoLoading} className="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200">{cfoLoading ? 'Yükleniyor...' : 'Raporu Getir'}</button></div>{cfoReport ? (<div className="space-y-4"><div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: cfoReport[0]?.data_summary }}></div><SimpleTable headers={['Kategori', 'İşlem', 'Tutar', 'KDV']} rows={cfoReport} keys={['Kategori', 'İşlem Adedi', 'Toplam Tutar', 'KDV Tutarı']} /></div>) : <p className="text-sm text-gray-400">Detaylı gider analizi için butona basın.</p>}</div>
                   </div>
                 )}
-
-                {/* 8. GÖRSEL */}
                 {activeTab === 'creative' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="md:col-span-1">{selectedFile && <div className="rounded-xl overflow-hidden border mb-4"><img src={URL.createObjectURL(selectedFile)} alt="Preview" className="w-full" /></div>}<div className={`text-center p-4 rounded-xl border ${creativeScore >= 7 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}><div className="text-4xl font-bold">{creativeScore}/10</div><div className="text-xs font-bold">PUAN</div></div></div><div className="md:col-span-2 bg-white rounded-xl shadow-sm border p-6 prose max-w-none"><h3 className="text-xl font-bold mb-4">Rapor</h3><div className="text-gray-600 text-sm whitespace-pre-line">{(data.text || JSON.stringify(data)).replace(/\*\*/g, '').replace(/###/g, '')}</div></div></div>
                 )}
@@ -293,32 +279,30 @@ const Dashboard = ({ session }) => {
 const MenuButton = ({ id, icon, label, activeTab, setActiveTab }) => (<button onClick={() => setActiveTab(id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${activeTab === id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>{icon} {label} {activeTab === id && <ChevronRight size={16} className="ml-auto" />}</button>);
 const StatCard = ({ label, value, color = 'gray' }) => (<div className={`bg-white p-4 rounded-lg shadow-sm border border-${color}-100`}><p className="text-xs text-gray-500 uppercase">{label}</p><p className={`text-lg font-bold text-${color}-600 mt-1`}>{value}</p></div>);
 const DetailRow = ({ label, value, highlight }) => (<div className={`flex justify-between border-b border-gray-100 pb-2 ${highlight ? 'font-bold text-indigo-600' : 'text-sm text-gray-600'}`}><span>{label}:</span><span>{value}</span></div>);
-const SimpleTable = ({ headers, rows, keys }) => (
-  <div className="overflow-x-auto">
-    <table className="w-full text-left min-w-[500px]">
-      <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
-        <tr>{headers.map((h, i) => <th key={i} className="p-4">{h}</th>)}</tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100 text-sm">
-        {rows?.map((row, i) => (
-          <tr key={i} className="hover:bg-gray-50/50">
-            {keys.map((k, j) => {
-              let val = row[k];
-              // Eğer sütun ismi 'desi' içeriyorsa veya değer Desi ise Para birimi koyma
-              const isDesi = k.toLowerCase().includes('desi') || k === 'gun'; 
-              
-              if (typeof val === 'number') {
-                 // Desi veya Gün ise normal sayı, değilse Para Birimi (TL)
-                 val = isDesi ? val.toLocaleString('tr-TR') : formatCurrency(val);
-              }
-              return <td key={j} className="p-4">{val}</td>;
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+
+// --- GÜNCELLENEN TABLO BİLEŞENİ ---
+const SimpleTable = ({ headers, rows, keys }) => (<div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr>{headers.map((h, i) => <th key={i} className="p-4">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 text-sm">{rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50">{keys.map((k, j) => {
+  // Eğer özel bir format bileşeni ise (Örn: DualCurrency) direkt render et
+  if (React.isValidElement(row[k])) return <td key={j} className="p-4">{row[k]}</td>;
+  
+  // Sayısal değerler için formatla
+  let val = row[k];
+  const isNumber = typeof val === 'number';
+  const isPlainNumber = k === 'adet' || k === 'gun' || k === 'stok' || k === 'hiz' || k === 'desi' || k === 'İşlem Adedi';
+  const isAciliyet = k === 'aciliyet';
+
+  if (isNumber) {
+      val = isPlainNumber ? val.toLocaleString('tr-TR') : formatCurrency(val);
+  }
+  
+  // Aciliyet Rozeti
+  if (isAciliyet) {
+      const color = val === 'Kritik' ? 'bg-red-100 text-red-700' : val === 'Yüksek' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700';
+      return <td key={j} className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${color}`}>{val}</span></td>;
+  }
+
+  return <td key={j} className="p-4">{val}</td>;
+})}</tr>))}</tbody></table></div>);
 
 function App() {
   const [session, setSession] = useState(null);
