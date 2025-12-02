@@ -57,10 +57,10 @@ const Dashboard = ({ session }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   
-  // Inputlar ve Filtreler
+  // Inputlar
   const [selectedFile, setSelectedFile] = useState(null); 
   const [devredenKDV, setDevredenKDV] = useState(0); 
-  const [cargoFilter, setCargoFilter] = useState(''); // Kargo Filtresi
+  const [cargoFilter, setCargoFilter] = useState('');
 
   const CONFIG = {
     cost: { title: 'Maliyet Analizi', desc: 'Ürün bazlı karlılık ve gider analizi.', url: 'https://n8n.lolie.com.tr/webhook/maliyet-analizi', color: 'blue' },
@@ -77,23 +77,30 @@ const Dashboard = ({ session }) => {
     setData(null);
     setSelectedFile(null);
     setLoading(false);
-    setCargoFilter(''); // Sekme değişince filtreyi sıfırla
+    setCargoFilter('');
   }, [activeTab]);
 
-  // KARGO FİLTRELEME VE HESAPLAMA MANTIĞI
+  // Kargo Filtreleme
   const cargoData = useMemo(() => {
     if (activeTab !== 'cargo' || !data?.my_results) return { filtered: [], totalLoss: 0 };
-    
     const filtered = data.my_results.filter(item => 
       item.cargo_firm.toLowerCase().includes(cargoFilter.toLowerCase()) ||
       item.order_id.toLowerCase().includes(cargoFilter.toLowerCase())
     );
-
     const totalLoss = filtered.reduce((acc, item) => acc + (Number(item.price_diff) || 0), 0);
-
     return { filtered, totalLoss };
   }, [data, cargoFilter, activeTab]);
 
+  // Kreatif Puanı Ayrıştırıcı (REGEX EKLENDİ)
+  const creativeScore = useMemo(() => {
+    if (activeTab !== 'creative' || !data) return 0;
+    // 1. n8n direkt gönderdiyse onu al
+    if (data.score) return parseInt(data.score);
+    // 2. Göndermediyse metnin içinden "5/10" veya "Puan: 5" desenini bul
+    const text = data.text || JSON.stringify(data);
+    const match = text.match(/(\d+)\s*\/\s*10/) || text.match(/Puan:\s*(\d+)/i);
+    return match ? parseInt(match[1]) : 0;
+  }, [data, activeTab]);
 
   const handleTrigger = async () => {
     setLoading(true);
@@ -106,9 +113,7 @@ const Dashboard = ({ session }) => {
         email: session.user.email
       };
 
-      if (activeTab === 'tax') {
-        bodyData.devreden_kdv = devredenKDV;
-      }
+      if (activeTab === 'tax') bodyData.devreden_kdv = devredenKDV;
 
       if (['ocr', 'bulk', 'creative'].includes(activeTab)) {
         if (!selectedFile) {
@@ -119,7 +124,6 @@ const Dashboard = ({ session }) => {
         const base64File = await fileToBase64(selectedFile);
         bodyData.file_data = base64File;
         bodyData.file_name = selectedFile.name;
-        
         if(activeTab === 'creative') { bodyData.image = base64File; }
       }
 
@@ -132,7 +136,6 @@ const Dashboard = ({ session }) => {
       if (!response.ok) throw new Error('Sunucu hatası');
       const result = await response.json();
       setData(result);
-
     } catch (error) {
       console.error(error);
       alert('İşlem başarısız. Detaylar konsolda.');
@@ -181,7 +184,6 @@ const Dashboard = ({ session }) => {
                 </div>
                 <div className="flex items-center gap-3">
                   
-                  {/* Vergi Input */}
                   {activeTab === 'tax' && (
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 font-semibold ml-1">Devreden KDV</label>
@@ -189,7 +191,6 @@ const Dashboard = ({ session }) => {
                     </div>
                   )}
 
-                  {/* Dosya Input */}
                   {['ocr', 'bulk', 'creative'].includes(activeTab) && (
                     <div className="relative">
                       <input type="file" id="fileInput" className="hidden" accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"} onChange={(e) => setSelectedFile(e.target.files[0])} />
@@ -220,7 +221,7 @@ const Dashboard = ({ session }) => {
             {data && (
               <div className="animate-fade-in-up space-y-6">
                 
-                {/* 1. MALİYET */}
+                {/* 1-3. ANALİZLER */}
                 {activeTab === 'cost' && data.stats && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -231,8 +232,6 @@ const Dashboard = ({ session }) => {
                       <SimpleTable headers={['SKU', 'Ürün', 'Ham Mal.', 'Yüklü Mal.']} rows={data.rows} keys={['sku', 'name', 'cost', 'loaded_cost']} />
                    </div>
                 )}
-
-                {/* 2. ÖLÜ STOK */}
                 {activeTab === 'dead' && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex justify-between items-center border border-red-100">
@@ -242,8 +241,6 @@ const Dashboard = ({ session }) => {
                       <SimpleTable headers={['Kod', 'Ürün', 'Adet', 'Tutar']} rows={data.list} keys={['kod', 'urun_adi', 'adet', 'bagli_para']} />
                    </div>
                 )}
-
-                {/* 3. STOCKOUT */}
                 {activeTab === 'stockout' && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                      <div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6" />
@@ -251,10 +248,9 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* 4. KARGO KAÇAĞI (GÜNCELLENDİ) */}
+                {/* 4. KARGO */}
                 {activeTab === 'cargo' && (
                    <div className="space-y-6">
-                      {/* Toplam Zarar ve Filtre Kartı */}
                       <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                           <div className="flex items-center gap-4 w-full md:w-auto">
                               <div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div>
@@ -263,27 +259,14 @@ const Dashboard = ({ session }) => {
                                   <h3 className="text-2xl font-bold text-red-600">₺{cargoData.totalLoss.toLocaleString()}</h3>
                               </div>
                           </div>
-                          
-                          {/* Filtre Input */}
                           <div className="relative w-full md:w-64">
                               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                              <input 
-                                type="text" 
-                                placeholder="Kargo firması veya Sipariş No..." 
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                value={cargoFilter}
-                                onChange={(e) => setCargoFilter(e.target.value)}
-                              />
+                              <input type="text" placeholder="Filtrele..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} />
                           </div>
                       </div>
-
                       <div className="bg-white rounded-xl shadow-sm border p-6">
                           <h3 className="font-bold text-gray-800 mb-4">Tespit Edilen Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3>
-                          <SimpleTable 
-                            headers={['Sipariş No', 'Kargo Firması', 'Desi', 'Fiyat Farkı']} 
-                            rows={cargoData.filtered} 
-                            keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} 
-                          />
+                          <SimpleTable headers={['Sipariş No', 'Kargo Firması', 'Desi', 'Fiyat Farkı']} rows={cargoData.filtered} keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} />
                        </div>
                    </div>
                 )}
@@ -311,7 +294,7 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* 6. TOPLU EXCEL */}
+                {/* 6. BULK */}
                 {activeTab === 'bulk' && data.stats && (
                   <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
                      <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div>
@@ -325,34 +308,24 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* 7. VERGİ (GÜNCELLENDİ) */}
+                {/* 7. VERGİ */}
                 {activeTab === 'tax' && data.tahminiAySonuCiro !== undefined && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                      <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-gray-800 text-lg">Vergi Projeksiyonu</h3>
-                        <a 
-                          href={`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${data.fileBase64 || ''}`} 
-                          download={`${data.fileName || 'Rapor'}.xlsx`}
-                          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                        >
-                           <Download size={16} /> Excel İndir
-                        </a>
+                        <a href={`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${data.fileBase64 || ''}`} download={`${data.fileName || 'Rapor'}.xlsx`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"><Download size={16} /> Excel İndir</a>
                      </div>
-                     {/* 5 Sütunlu Grid: Devreden KDV Eklendi */}
                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <StatCard label="Tahmini Ciro" value={`₺${data.tahminiAySonuCiro?.toFixed(2)}`} />
                         <StatCard label="Hesaplanan KDV" value={`₺${data.tahminiHesaplananKDV?.toFixed(2)}`} color="red" />
-                        
-                        {/* Devreden KDV Kartı Eklendi */}
                         <StatCard label="(-) Devreden KDV" value={`₺${data.devredenKDV?.toFixed(2)}`} color="blue" />
-                        
                         <StatCard label="Ödenecek KDV" value={`₺${data.odenecekKDV?.toFixed(2)}`} color="orange" />
                         <StatCard label="Güvenli Liman" value={`₺${data.guvenliLiman?.toFixed(2)}`} color="green" />
                      </div>
                   </div>
                 )}
 
-                {/* 8. GÖRSEL PUANLAMA */}
+                {/* 8. GÖRSEL PUANLAMA (DÜZELTİLDİ: Puanı Bulur) */}
                 {activeTab === 'creative' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                      <div className="md:col-span-1">
@@ -361,8 +334,8 @@ const Dashboard = ({ session }) => {
                               <img src={URL.createObjectURL(selectedFile)} alt="Preview" className="w-full h-auto" />
                            </div>
                         )}
-                        <div className={`mt-4 text-center p-4 rounded-xl border ${parseInt(data.score || 0) >= 7 ? 'bg-green-50 border-green-200 text-green-700' : parseInt(data.score || 0) >= 5 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                           <div className="text-4xl font-bold mb-1">{data.score || 0}/10</div>
+                        <div className={`mt-4 text-center p-4 rounded-xl border ${creativeScore >= 7 ? 'bg-green-50 border-green-200 text-green-700' : creativeScore >= 5 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                           <div className="text-4xl font-bold mb-1">{creativeScore}/10</div>
                            <div className="text-xs font-bold uppercase tracking-wider">Kreatif Puanı</div>
                         </div>
                      </div>
