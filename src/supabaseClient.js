@@ -2,6 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 
 // BURAYA KENDİ URL VE KEY BİLGİLERİNİ GİR
 const supabaseUrl = 'sb_publishable_tE_U041JjJ12n2lfoKG5WA_2C9ue8Dh'; 
-const supabaseAnonKey = 'sb_secret_3fdFRQQT6tDZ_xvN0iJOgg_38VvdA-U'; // Senin paylaştığın key
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlZXNpZndlempjc3VuamJteHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MjM2OTMsImV4cCI6MjA3OTk5OTY5M30.vRiReyGh1I4EoAWetVPkaX_AuxBt_Xwxb_E30jPzp0s'; // Senin paylaştığın key
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
