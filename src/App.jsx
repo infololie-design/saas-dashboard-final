@@ -11,7 +11,7 @@ const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result); // "data:image/png;base64,..." döner
+    reader.onload = () => resolve(reader.result); 
     reader.onerror = error => reject(error);
   });
 };
@@ -58,16 +58,13 @@ const Dashboard = ({ session }) => {
   const [data, setData] = useState(null);
   
   // Form Inputları
-  const [selectedFile, setSelectedFile] = useState(null); // Dosya yüklemeleri için
-  const [devredenKDV, setDevredenKDV] = useState(0); // Vergi hesabı için
+  const [selectedFile, setSelectedFile] = useState(null); 
+  const [devredenKDV, setDevredenKDV] = useState(0); 
 
   const CONFIG = {
-    // 1-3. Mevcutlar
     cost: { title: 'Maliyet Analizi', desc: 'Ürün bazlı karlılık ve gider analizi.', url: 'https://n8n.lolie.com.tr/webhook/maliyet-analizi', color: 'blue' },
     dead: { title: 'Ölü Stok Analizi', desc: '30+ gündür satılmayan ürünler.', url: 'https://n8n.lolie.com.tr/webhook/deadstock', color: 'red' },
     stockout: { title: 'Stok Tükenme Riski', desc: 'Kritik seviyedeki ürünler.', url: 'https://n8n.lolie.com.tr/webhook/stockout-api', color: 'amber' },
-    
-    // 4-8. Yeniler
     cargo: { title: 'Kargo Kaçağı', desc: 'Sistemsel kargo tutarsızlıkları.', url: 'https://n8n.lolie.com.tr/webhook/analiz-baslat', color: 'purple' },
     ocr: { title: 'Fatura OCR', desc: 'Fatura görselinden veri ayıklama.', url: 'https://n8n.lolie.com.tr/webhook/fatura-analiz', color: 'indigo' },
     bulk: { title: 'Toplu Excel Yükle', desc: 'Geçmiş faturaları sisteme aktar.', url: 'https://n8n.lolie.com.tr/webhook/bulk-invoice-upload', color: 'green' },
@@ -75,14 +72,12 @@ const Dashboard = ({ session }) => {
     creative: { title: 'Görsel Puanlama', desc: 'AI ile reklam görseli analizi.', url: 'https://n8n.lolie.com.tr/webhook/creative-scorer-analyze', color: 'pink' }
   };
 
-  // Sekme değişince verileri temizle
   useEffect(() => {
     setData(null);
     setSelectedFile(null);
     setLoading(false);
   }, [activeTab]);
 
-  // ANA TETİKLEME FONKSİYONU
   const handleTrigger = async () => {
     setLoading(true);
     setData(null);
@@ -94,30 +89,25 @@ const Dashboard = ({ session }) => {
         email: session.user.email
       };
 
-      // Özel Durumlar (Inputlar)
       if (activeTab === 'tax') {
         bodyData.devreden_kdv = devredenKDV;
       }
 
-      // Dosya Yükleme Durumları (OCR, Bulk, Creative)
       if (['ocr', 'bulk', 'creative'].includes(activeTab)) {
         if (!selectedFile) {
           alert('Lütfen bir dosya seçin!');
           setLoading(false);
           return;
         }
-        // Dosyayı Base64 string'e çevirip JSON içinde gönderiyoruz
         const base64File = await fileToBase64(selectedFile);
-        bodyData.file_data = base64File; // n8n'de bu field'ı okuyacağız
+        bodyData.file_data = base64File;
         bodyData.file_name = selectedFile.name;
         
-        // Creative Scorer için özel field (Senin n8n noduna uyum için)
         if(activeTab === 'creative') {
              bodyData.image = base64File; 
         }
       }
 
-      // Proxy Üzerinden İstek At
       const response = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +128,6 @@ const Dashboard = ({ session }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* HEADER */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-600 p-2 rounded-lg text-white"><LayoutDashboard size={24} /></div>
@@ -151,7 +140,6 @@ const Dashboard = ({ session }) => {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* SIDEBAR MENÜ */}
         <aside className="w-64 bg-white border-r border-gray-200 overflow-y-auto hidden md:block">
           <div className="p-4 space-y-1">
             <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Analizler</p>
@@ -168,69 +156,32 @@ const Dashboard = ({ session }) => {
           </div>
         </aside>
 
-        {/* ANA İÇERİK */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-5xl mx-auto">
-            
-            {/* Başlık ve Aksiyon Alanı */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    {CONFIG[activeTab].title}
-                  </h2>
+                  <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">{CONFIG[activeTab].title}</h2>
                   <p className="text-gray-500 mt-1">{CONFIG[activeTab].desc}</p>
                 </div>
-
-                {/* ÖZEL INPUT ALANLARI */}
                 <div className="flex items-center gap-3">
-                  
-                  {/* Vergi için Input */}
                   {activeTab === 'tax' && (
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 font-semibold ml-1">Devreden KDV</label>
-                      <input 
-                        type="number" 
-                        className="border border-gray-300 rounded-lg px-3 py-2 w-32 focus:ring-2 focus:ring-cyan-500 outline-none"
-                        value={devredenKDV}
-                        onChange={(e) => setDevredenKDV(e.target.value)}
-                      />
+                      <input type="number" className="border border-gray-300 rounded-lg px-3 py-2 w-32 focus:ring-2 focus:ring-cyan-500 outline-none" value={devredenKDV} onChange={(e) => setDevredenKDV(e.target.value)} />
                     </div>
                   )}
 
-                  {/* Dosya Yükleme Butonları */}
                   {['ocr', 'bulk', 'creative'].includes(activeTab) && (
                     <div className="relative">
-                      <input 
-                        type="file" 
-                        id="fileInput" 
-                        className="hidden" 
-                        accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"}
-                        onChange={(e) => setSelectedFile(e.target.files[0])}
-                      />
-                      <label 
-                        htmlFor="fileInput" 
-                        className={`cursor-pointer flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-${CONFIG[activeTab].color}-500 hover:bg-gray-50 transition`}
-                      >
-                        {selectedFile ? (
-                           <span className="text-green-600 font-medium text-sm flex items-center gap-1">
-                             <CheckCircle size={14} /> {selectedFile.name.substring(0,15)}...
-                           </span>
-                        ) : (
-                           <span className="text-gray-500 text-sm flex items-center gap-1">
-                             <Upload size={14} /> Dosya Seç
-                           </span>
-                        )}
+                      <input type="file" id="fileInput" className="hidden" accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"} onChange={(e) => setSelectedFile(e.target.files[0])} />
+                      <label htmlFor="fileInput" className={`cursor-pointer flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-${CONFIG[activeTab].color}-500 hover:bg-gray-50 transition`}>
+                        {selectedFile ? <span className="text-green-600 font-medium text-sm flex items-center gap-1"><CheckCircle size={14} /> {selectedFile.name.substring(0,15)}...</span> : <span className="text-gray-500 text-sm flex items-center gap-1"><Upload size={14} /> Dosya Seç</span>}
                       </label>
                     </div>
                   )}
 
-                  <button
-                    onClick={handleTrigger}
-                    disabled={loading}
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium shadow-md transition transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed
-                      bg-${CONFIG[activeTab].color}-600 hover:bg-${CONFIG[activeTab].color}-700`}
-                  >
+                  <button onClick={handleTrigger} disabled={loading} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium shadow-md transition transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed bg-${CONFIG[activeTab].color}-600 hover:bg-${CONFIG[activeTab].color}-700`}>
                     <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     {loading ? 'İşleniyor...' : 'Başlat'}
                   </button>
@@ -238,9 +189,6 @@ const Dashboard = ({ session }) => {
               </div>
             </div>
 
-            {/* --- SONUÇ ALANLARI --- */}
-            
-            {/* BOŞ DURUM */}
             {!data && !loading && (
               <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-200">
                 <div className={`inline-flex p-4 rounded-full bg-${CONFIG[activeTab].color}-50 text-${CONFIG[activeTab].color}-500 mb-4`}>
@@ -251,11 +199,9 @@ const Dashboard = ({ session }) => {
               </div>
             )}
 
-            {/* VERİ GELDİĞİNDE GÖSTERİLECEK ALANLAR */}
             {data && (
               <div className="animate-fade-in-up space-y-6">
                 
-                {/* 1. MALİYET (Tablo) */}
                 {activeTab === 'cost' && data.stats && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -267,7 +213,6 @@ const Dashboard = ({ session }) => {
                    </div>
                 )}
 
-                {/* 2. ÖLÜ STOK */}
                 {activeTab === 'dead' && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex justify-between items-center border border-red-100">
@@ -278,7 +223,6 @@ const Dashboard = ({ session }) => {
                    </div>
                 )}
 
-                {/* 3. STOCKOUT */}
                 {activeTab === 'stockout' && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                      <div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6" />
@@ -286,19 +230,13 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* 4. KARGO KAÇAĞI */}
                 {activeTab === 'cargo' && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <h3 className="font-bold text-gray-800 mb-4">Tespit Edilen Kargo Tutarsızlıkları</h3>
-                      <SimpleTable 
-                        headers={['Sipariş No', 'Kargo Firması', 'Desi', 'Fiyat Farkı']} 
-                        rows={data.my_results || []} 
-                        keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} 
-                      />
+                      <SimpleTable headers={['Sipariş No', 'Kargo Firması', 'Desi', 'Fiyat Farkı']} rows={data.my_results || []} keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} />
                    </div>
                 )}
 
-                {/* 5. FATURA OCR */}
                 {activeTab === 'ocr' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-xl shadow-sm border">
@@ -321,15 +259,11 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* 6. TOPLU EXCEL */}
                 {activeTab === 'bulk' && data.stats && (
                   <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
-                     <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4">
-                        <CheckCircle size={48} />
-                     </div>
+                     <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div>
                      <h2 className="text-2xl font-bold text-gray-800 mb-2">İşlem Tamamlandı</h2>
                      <p className="text-gray-500 mb-8">Excel dosyanız başarıyla işlendi ve veritabanına aktarıldı.</p>
-                     
                      <div className="grid grid-cols-3 gap-6 max-w-lg mx-auto">
                         <StatCard label="Toplam Satır" value={data.stats.total} />
                         <StatCard label="Eklenen" value={data.stats.added} color="green" />
@@ -338,52 +272,45 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* 7. AKILLI VERGİ */}
-                {activeTab === 'tax' && Array.isArray(data) && data[0] && (
+                {/* --- DÜZELTİLEN KISIM: Vergi Sekmesi --- */}
+                {/* Artık veriyi data[0] olarak değil, direkt data objesi olarak okuyoruz */}
+                {activeTab === 'tax' && data.tahminiAySonuCiro !== undefined && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                      <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-gray-800 text-lg">Vergi Projeksiyonu</h3>
                         <a 
-                          href={`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${data[0].fileBase64 || ''}`} // n8n'den base64 dönmeli, yoksa boş
-                          download={`${data[0].fileName}.xlsx`}
+                          href={`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${data.fileBase64 || ''}`} 
+                          download={`${data.fileName || 'Rapor'}.xlsx`}
                           className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
                         >
                            <Download size={16} /> Excel İndir
                         </a>
                      </div>
                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard label="Tahmini Ciro" value={`₺${data[0].tahminiAySonuCiro?.toFixed(2)}`} />
-                        <StatCard label="Hesaplanan KDV" value={`₺${data[0].tahminiHesaplananKDV?.toFixed(2)}`} color="red" />
-                        <StatCard label="Ödenecek KDV" value={`₺${data[0].odenecekKDV?.toFixed(2)}`} color="orange" />
-                        <StatCard label="Güvenli Liman" value={`₺${data[0].guvenliLiman?.toFixed(2)}`} color="green" />
+                        <StatCard label="Tahmini Ciro" value={`₺${data.tahminiAySonuCiro?.toFixed(2)}`} />
+                        <StatCard label="Hesaplanan KDV" value={`₺${data.tahminiHesaplananKDV?.toFixed(2)}`} color="red" />
+                        <StatCard label="Ödenecek KDV" value={`₺${data.odenecekKDV?.toFixed(2)}`} color="orange" />
+                        <StatCard label="Güvenli Liman" value={`₺${data.guvenliLiman?.toFixed(2)}`} color="green" />
                      </div>
                   </div>
                 )}
 
-                {/* 8. GÖRSEL PUANLAMA */}
                 {activeTab === 'creative' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                     {/* Görsel Önizleme */}
                      <div className="md:col-span-1">
                         {selectedFile && (
                            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
                               <img src={URL.createObjectURL(selectedFile)} alt="Preview" className="w-full h-auto" />
                            </div>
                         )}
-                        <div className={`mt-4 text-center p-4 rounded-xl border ${
-                           parseInt(data.score || 0) >= 7 ? 'bg-green-50 border-green-200 text-green-700' : 
-                           parseInt(data.score || 0) >= 5 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 
-                           'bg-red-50 border-red-200 text-red-700'
-                        }`}>
+                        <div className={`mt-4 text-center p-4 rounded-xl border ${parseInt(data.score || 0) >= 7 ? 'bg-green-50 border-green-200 text-green-700' : parseInt(data.score || 0) >= 5 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
                            <div className="text-4xl font-bold mb-1">{data.score || 0}/10</div>
                            <div className="text-xs font-bold uppercase tracking-wider">Kreatif Puanı</div>
                         </div>
                      </div>
-                     {/* Rapor Metni */}
                      <div className="md:col-span-2 bg-white rounded-xl shadow-sm border p-6 prose max-w-none">
                         <h3 className="text-xl font-bold text-gray-800 mb-4">AI Analiz Raporu</h3>
                         <div className="text-gray-600 whitespace-pre-line leading-relaxed">
-                           {/* n8n'den gelen metni temizle */}
                            {(data.text || JSON.stringify(data)).replace(/\*\*/g, '').replace(/###/g, '')}
                         </div>
                      </div>
@@ -401,12 +328,7 @@ const Dashboard = ({ session }) => {
 
 // --- YARDIMCI COMPONENTLER ---
 const MenuButton = ({ id, icon, label, activeTab, setActiveTab }) => (
-  <button
-    onClick={() => setActiveTab(id)}
-    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-      activeTab === id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'
-    }`}
-  >
+  <button onClick={() => setActiveTab(id)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${activeTab === id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
     {icon} {label} {activeTab === id && <ChevronRight size={16} className="ml-auto" />}
   </button>
 );
