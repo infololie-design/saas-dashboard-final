@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { 
   LayoutDashboard, TrendingUp, AlertTriangle, PackageX, 
   LogOut, RefreshCw, Truck, FileText, Upload, 
-  Calculator, Camera, Download, ChevronRight, CheckCircle 
+  Calculator, Camera, Download, ChevronRight, CheckCircle, Search 
 } from 'lucide-react';
 
-// --- YARDIMCI: Dosyayı Base64'e Çevir (Proxy İçin) ---
+// --- YARDIMCI: Dosyayı Base64'e Çevir ---
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -57,9 +57,10 @@ const Dashboard = ({ session }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   
-  // Form Inputları
+  // Inputlar ve Filtreler
   const [selectedFile, setSelectedFile] = useState(null); 
   const [devredenKDV, setDevredenKDV] = useState(0); 
+  const [cargoFilter, setCargoFilter] = useState(''); // Kargo Filtresi
 
   const CONFIG = {
     cost: { title: 'Maliyet Analizi', desc: 'Ürün bazlı karlılık ve gider analizi.', url: 'https://n8n.lolie.com.tr/webhook/maliyet-analizi', color: 'blue' },
@@ -76,7 +77,23 @@ const Dashboard = ({ session }) => {
     setData(null);
     setSelectedFile(null);
     setLoading(false);
+    setCargoFilter(''); // Sekme değişince filtreyi sıfırla
   }, [activeTab]);
+
+  // KARGO FİLTRELEME VE HESAPLAMA MANTIĞI
+  const cargoData = useMemo(() => {
+    if (activeTab !== 'cargo' || !data?.my_results) return { filtered: [], totalLoss: 0 };
+    
+    const filtered = data.my_results.filter(item => 
+      item.cargo_firm.toLowerCase().includes(cargoFilter.toLowerCase()) ||
+      item.order_id.toLowerCase().includes(cargoFilter.toLowerCase())
+    );
+
+    const totalLoss = filtered.reduce((acc, item) => acc + (Number(item.price_diff) || 0), 0);
+
+    return { filtered, totalLoss };
+  }, [data, cargoFilter, activeTab]);
+
 
   const handleTrigger = async () => {
     setLoading(true);
@@ -103,9 +120,7 @@ const Dashboard = ({ session }) => {
         bodyData.file_data = base64File;
         bodyData.file_name = selectedFile.name;
         
-        if(activeTab === 'creative') {
-             bodyData.image = base64File; 
-        }
+        if(activeTab === 'creative') { bodyData.image = base64File; }
       }
 
       const response = await fetch('/api/proxy', {
@@ -165,6 +180,8 @@ const Dashboard = ({ session }) => {
                   <p className="text-gray-500 mt-1">{CONFIG[activeTab].desc}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                  
+                  {/* Vergi Input */}
                   {activeTab === 'tax' && (
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 font-semibold ml-1">Devreden KDV</label>
@@ -172,6 +189,7 @@ const Dashboard = ({ session }) => {
                     </div>
                   )}
 
+                  {/* Dosya Input */}
                   {['ocr', 'bulk', 'creative'].includes(activeTab) && (
                     <div className="relative">
                       <input type="file" id="fileInput" className="hidden" accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"} onChange={(e) => setSelectedFile(e.target.files[0])} />
@@ -202,6 +220,7 @@ const Dashboard = ({ session }) => {
             {data && (
               <div className="animate-fade-in-up space-y-6">
                 
+                {/* 1. MALİYET */}
                 {activeTab === 'cost' && data.stats && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -213,6 +232,7 @@ const Dashboard = ({ session }) => {
                    </div>
                 )}
 
+                {/* 2. ÖLÜ STOK */}
                 {activeTab === 'dead' && (
                    <div className="bg-white rounded-xl shadow-sm border p-6">
                       <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex justify-between items-center border border-red-100">
@@ -223,6 +243,7 @@ const Dashboard = ({ session }) => {
                    </div>
                 )}
 
+                {/* 3. STOCKOUT */}
                 {activeTab === 'stockout' && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                      <div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6" />
@@ -230,13 +251,44 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
+                {/* 4. KARGO KAÇAĞI (GÜNCELLENDİ) */}
                 {activeTab === 'cargo' && (
-                   <div className="bg-white rounded-xl shadow-sm border p-6">
-                      <h3 className="font-bold text-gray-800 mb-4">Tespit Edilen Kargo Tutarsızlıkları</h3>
-                      <SimpleTable headers={['Sipariş No', 'Kargo Firması', 'Desi', 'Fiyat Farkı']} rows={data.my_results || []} keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} />
+                   <div className="space-y-6">
+                      {/* Toplam Zarar ve Filtre Kartı */}
+                      <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                          <div className="flex items-center gap-4 w-full md:w-auto">
+                              <div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div>
+                              <div>
+                                  <p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p>
+                                  <h3 className="text-2xl font-bold text-red-600">₺{cargoData.totalLoss.toLocaleString()}</h3>
+                              </div>
+                          </div>
+                          
+                          {/* Filtre Input */}
+                          <div className="relative w-full md:w-64">
+                              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                              <input 
+                                type="text" 
+                                placeholder="Kargo firması veya Sipariş No..." 
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                                value={cargoFilter}
+                                onChange={(e) => setCargoFilter(e.target.value)}
+                              />
+                          </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm border p-6">
+                          <h3 className="font-bold text-gray-800 mb-4">Tespit Edilen Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3>
+                          <SimpleTable 
+                            headers={['Sipariş No', 'Kargo Firması', 'Desi', 'Fiyat Farkı']} 
+                            rows={cargoData.filtered} 
+                            keys={['order_id', 'cargo_firm', 'desi', 'price_diff']} 
+                          />
+                       </div>
                    </div>
                 )}
 
+                {/* 5. OCR */}
                 {activeTab === 'ocr' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-xl shadow-sm border">
@@ -259,6 +311,7 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
+                {/* 6. TOPLU EXCEL */}
                 {activeTab === 'bulk' && data.stats && (
                   <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
                      <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div>
@@ -272,8 +325,7 @@ const Dashboard = ({ session }) => {
                   </div>
                 )}
 
-                {/* --- DÜZELTİLEN KISIM: Vergi Sekmesi --- */}
-                {/* Artık veriyi data[0] olarak değil, direkt data objesi olarak okuyoruz */}
+                {/* 7. VERGİ (GÜNCELLENDİ) */}
                 {activeTab === 'tax' && data.tahminiAySonuCiro !== undefined && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                      <div className="flex justify-between items-center mb-6">
@@ -286,15 +338,21 @@ const Dashboard = ({ session }) => {
                            <Download size={16} /> Excel İndir
                         </a>
                      </div>
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                     {/* 5 Sütunlu Grid: Devreden KDV Eklendi */}
+                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <StatCard label="Tahmini Ciro" value={`₺${data.tahminiAySonuCiro?.toFixed(2)}`} />
                         <StatCard label="Hesaplanan KDV" value={`₺${data.tahminiHesaplananKDV?.toFixed(2)}`} color="red" />
+                        
+                        {/* Devreden KDV Kartı Eklendi */}
+                        <StatCard label="(-) Devreden KDV" value={`₺${data.devredenKDV?.toFixed(2)}`} color="blue" />
+                        
                         <StatCard label="Ödenecek KDV" value={`₺${data.odenecekKDV?.toFixed(2)}`} color="orange" />
                         <StatCard label="Güvenli Liman" value={`₺${data.guvenliLiman?.toFixed(2)}`} color="green" />
                      </div>
                   </div>
                 )}
 
+                {/* 8. GÖRSEL PUANLAMA */}
                 {activeTab === 'creative' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                      <div className="md:col-span-1">
