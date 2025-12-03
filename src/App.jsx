@@ -7,12 +7,56 @@ import {
   Menu, X, Mail, FileBarChart
 } from 'lucide-react';
 
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = () => resolve(reader.result); 
-  reader.onerror = error => reject(error);
-});
+// --- YARDIMCI: Dosyayı Sıkıştır ve Base64'e Çevir ---
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    
+    // 1. Durum: Resim Dosyası (Sıkıştırma Uygula)
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Maksimum genişlik 1200px olsun (Okunurluk bozulmaz ama boyut çok düşer)
+          const MAX_WIDTH = 1200;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Kaliteyi %70'e düşür (JPEG formatında)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(dataUrl);
+        };
+      };
+      reader.onerror = error => reject(error);
+    } 
+    
+    // 2. Durum: PDF veya Excel (Sıkıştırılamaz, Boyut Kontrolü Yap)
+    else {
+      if (file.size > 4.5 * 1024 * 1024) { // 4.5 MB Limit (Vercel Sınırı)
+        alert("Dosya boyutu çok yüksek (Max 4.5MB). Lütfen daha küçük bir dosya yükleyin.");
+        reject(new Error("File too large"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    }
+  });
+};
 
 // --- PARA BİRİMİ FORMATI (DÜZELTİLDİ: Çift Simgeyi Önler) ---
 const formatCurrency = (value, currency = 'TRY') => {
