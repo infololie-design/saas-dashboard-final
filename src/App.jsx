@@ -175,10 +175,34 @@ const Dashboard = ({ session }) => {
       }
       const response = await fetch('/api/proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
       if (!response.ok) throw new Error('Sunucu hatası');
-      const result = await response.json();
-      setData(result);
-    } catch (error) { console.error(error); alert('İşlem başarısız.'); } finally { setLoading(false); }
-  };
+      // ... önceki kodlar aynı ...
+      const response = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData)
+      });
+
+      // API'den dönen JSON cevabını al
+      const result = await response.json(); 
+
+      // HATA YÖNETİMİ (Burayı Ekliyoruz)
+      if (!response.ok || result.status === 'duplicate' || result.status === 'error') {
+         // Eğer sunucudan özel mesaj geldiyse onu göster, yoksa genel hata
+         const msg = result.message || result.error || 'İşlem başarısız.';
+         alert(msg);
+         setLoading(false);
+         return; // İşlemi durdur
+      }
+
+      // Başarılıysa veriyi set et
+      setData(result.data || result); 
+
+    } catch (error) {
+      console.error(error);
+      alert('Bağlantı hatası.');
+    } finally {
+      setLoading(false);
+    }
 
   const fetchCfoReport = async () => {
     setCfoLoading(true);
