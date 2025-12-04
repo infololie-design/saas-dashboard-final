@@ -211,6 +211,45 @@ const Dashboard = ({ session }) => {
     }
   };
 
+  // --- YENİ EKLENEN: Alım Faturası Yükleme Fonksiyonu ---
+  const handlePurchaseUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+       const base64File = await fileToBase64(file);
+       const response = await fetch('/api/proxy', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+               targetUrl: 'https://n8n.lolie.com.tr/webhook/bulk-purchase-upload',
+               user_id: session.user.id,
+               email: session.user.email,
+               file_data: base64File,
+               file_name: file.name
+           })
+       });
+
+       const result = await response.json();
+       
+       if (!response.ok || result.status === 'error') {
+         alert(result.message || "Hata oluştu.");
+       } else {
+         alert("Alım faturası başarıyla işlendi ve stok maliyetleri güncellendi.");
+         // Maliyet tablosunu güncellemek için ana analizi tetikle
+         handleTrigger();
+       }
+
+    } catch (err) {
+       console.error(err);
+       alert("Dosya yüklenirken hata oluştu.");
+    } finally {
+       setLoading(false);
+    }
+  };
+  // -------------------------------------------------------
+
   const fetchCfoReport = async () => {
     setCfoLoading(true);
     try {
@@ -265,6 +304,16 @@ const Dashboard = ({ session }) => {
               <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div><h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">{CONFIG[activeTab].title}</h2><p className="text-sm md:text-base text-gray-500 mt-1">{CONFIG[activeTab].desc}</p></div>
                 <div className="flex flex-col sm:flex-row gap-3">
+                  {/* YENİ EKLENEN: Maliyet Analizi İçin Excel Yükleme Butonu */}
+                  {activeTab === 'cost' && (
+                    <>
+                      <input type="file" id="purchaseInput" className="hidden" accept=".xlsx,.xls" onChange={handlePurchaseUpload} disabled={loading} />
+                      <label htmlFor="purchaseInput" className={`cursor-pointer flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-green-500 hover:bg-green-50 hover:text-green-700 transition w-full sm:w-auto`}>
+                        <Upload size={16} /> Alım Faturası Yükle
+                      </label>
+                    </>
+                  )}
+                  
                   {activeTab === 'tax' && (<div className="flex items-center gap-2"><label className="text-xs text-gray-500 font-semibold whitespace-nowrap">Devr. KDV:</label><input type="number" className="border border-gray-300 rounded-lg px-3 py-2 w-full sm:w-24 focus:ring-2 focus:ring-cyan-500 outline-none" value={devredenKDV} onChange={(e) => setDevredenKDV(e.target.value)} /></div>)}
                   {['ocr', 'bulk', 'creative'].includes(activeTab) && (<div className="relative"><input type="file" id="fileInput" className="hidden" accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"} onChange={(e) => setSelectedFile(e.target.files[0])} /><label htmlFor="fileInput" className={`cursor-pointer flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-${CONFIG[activeTab].color}-500 hover:bg-gray-50 transition w-full`}>{selectedFile ? <span className="text-green-600 font-medium text-sm flex items-center gap-1"><CheckCircle size={14} /> Seçildi</span> : <span className="text-gray-500 text-sm flex items-center gap-1"><Upload size={14} /> Seç</span>}</label></div>)}
                   <button onClick={handleTrigger} disabled={loading} className={`flex justify-center items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium shadow-md transition transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed bg-${CONFIG[activeTab].color}-600 hover:bg-${CONFIG[activeTab].color}-700 w-full sm:w-auto`}><RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> {loading ? 'İşleniyor' : 'Başlat'}</button>
