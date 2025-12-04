@@ -416,20 +416,50 @@ const MenuButton = ({ id, icon, label, activeTab, setActiveTab }) => (<button on
 const StatCard = ({ label, value, color = 'gray' }) => (<div className={`bg-white p-4 rounded-lg shadow-sm border border-${color}-100`}><p className="text-xs text-gray-500 uppercase">{label}</p><p className={`text-lg font-bold text-${color}-600 mt-1`}>{typeof value === 'number' ? formatCurrency(value) : value}</p></div>);
 const DetailRow = ({ label, value, highlight }) => (<div className={`flex justify-between border-b border-gray-100 pb-2 ${highlight ? 'font-bold text-indigo-600' : 'text-sm text-gray-600'}`}><span>{label}:</span><span>{value}</span></div>);
 
-// Standart Tablo Bileşeni (Diğerleri için)
-const SimpleTable = ({ headers, rows, keys }) => (<div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr>{headers.map((h, i) => <th key={i} className="p-4">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 text-sm">{rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50">{keys.map((k, j) => {
-  let val = row[k];
-  const isNumber = typeof val === 'number';
-  const isPlainNumber = k.toLowerCase().includes('desi') || k === 'gun' || k === 'hiz' || k === 'adet';
-  
-  // ÖLÜ STOK ÖZEL DURUMU: Tutar sütununda hem TL hem USD göster
-  if (k === 'usd_bagli_para' && row[k]) {
-     val = <FormatDualCurrency tl={row['bagli_para']} usd={row[k]} />;
-  } else if (isNumber) {
-     val = isPlainNumber ? val.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : formatCurrency(val);
-  }
-  return <td key={j} className="p-4">{val}</td>;
-})}</tr>))}</tbody></table></div>);
+// GÜNCELLENMİŞ TABLO BİLEŞENİ (Hem Ölü Stok Hem Döviz Uyumlu)
+const SimpleTable = ({ headers, rows, keys }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full text-left min-w-[500px]">
+      <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+        <tr>{headers.map((h, i) => <th key={i} className="p-4">{h}</th>)}</tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100 text-sm">
+        {rows?.map((row, i) => (
+          <tr key={i} className="hover:bg-gray-50/50">
+            {keys.map((k, j) => {
+              let val = row[k];
+              const isNumber = typeof val === 'number';
+              
+              // 1. SADECE SAYI OLANLAR (Para birimi simgesi koyma)
+              const isPlainNumber = k.toLowerCase().includes('desi') || k === 'gun' || k === 'hiz' || k === 'adet' || k === 'quantity' || k === 'işlem adedi';
+              
+              // 2. ÖZEL DURUM: Ölü Stok (TL ve USD alt alta) - BUNU KORUDUK ✅
+              if (k === 'usd_bagli_para' && row[k]) {
+                 val = <FormatDualCurrency tl={row['bagli_para']} usd={row[k]} />;
+              } 
+              // 3. STANDART FORMATLAMA (YENİ EKLENEN KISIM) ✅
+              else if (isNumber) {
+                 if (isPlainNumber) {
+                    // Desi, Adet vb. ise sadece sayı
+                    val = val.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+                 } else {
+                    // Para ise satırdaki 'currency' değerine bak (USD, EUR, TRY)
+                    // Veritabanında 'currency' sütunu yoksa veya boşsa 'TRY' varsayar.
+                    let code = 'TRY';
+                    if (row.currency === 'USD' || row.currency === '$') code = 'USD';
+                    if (row.currency === 'EUR' || row.currency === '€') code = 'EUR';
+                    
+                    val = val.toLocaleString('tr-TR', { style: 'currency', currency: code });
+                 }
+              }
+              return <td key={j} className="p-4">{val}</td>;
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
 
 function App() {
   const [session, setSession] = useState(null);
