@@ -330,36 +330,59 @@ const Dashboard = ({ session }) => {
                   <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6 text-sm" /><SimpleTable headers={['SKU', 'ÜRÜN ADI', 'SATIŞ HIZI (GÜN)', 'KALAN GÜN', 'DURUM']} rows={data.stockoutList} keys={['kod', 'urun_adi', 'hiz', 'gun', 'aciliyet']} /></div>
                 )}
                 
-                {/* 4. KARGO (DÜZELTİLDİ) */}
+                {/* 4. KARGO (GÜNCELLENDİ: Detaylı Tablo) */}
                 {activeTab === 'cargo' && (
                    <div className="space-y-6">
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                          <div className="flex items-center gap-4"><div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div><div><p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p><h3 className="text-2xl font-bold text-red-600">{formatCurrency(cargoData.totalLoss)}</h3></div></div>
-                          <div className="relative w-full md:w-64"><Search className="absolute left-3 top-2.5 text-gray-400" size={18} /><input type="text" placeholder="Filtrele..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} /></div>
+                          <div className="flex items-center gap-4">
+                              <div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div>
+                              <div>
+                                  <p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p>
+                                  <h3 className="text-2xl font-bold text-red-600">{formatCurrency(cargoData.totalLoss)}</h3>
+                              </div>
+                          </div>
+                          <div className="relative w-full md:w-64">
+                              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                              <input type="text" placeholder="Sipariş veya İçerik ara..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} />
+                          </div>
                       </div>
                       
-                      {/* ÖZEL MANUEL TABLO: Kesin kontrol için */}
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
-                          <h3 className="font-bold text-gray-800 mb-4 text-sm md:text-base">Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3>
+                          <h3 className="font-bold text-gray-800 mb-4 text-sm md:text-base">Tespit Edilen Tutarsızlıklar ({cargoData.filtered.length})</h3>
                           <div className="overflow-x-auto">
-                              <table className="w-full text-left min-w-[500px]">
+                              <table className="w-full text-left min-w-[700px]">
                                   <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
                                       <tr>
                                           <th className="p-4">SİPARİŞ</th>
-                                          <th className="p-4">FİRMA</th>
-                                          <th className="p-4">DESİ</th>
-                                          <th className="p-4">FARK</th>
+                                          <th className="p-4">İÇERİK</th>
+                                          <th className="p-4 text-center">BEKLENEN</th>
+                                          <th className="p-4 text-center">KESİLEN</th>
+                                          <th className="p-4 text-right">FARK (ZARAR)</th>
                                       </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-100 text-sm">
                                       {cargoData.filtered.map((row, i) => (
                                           <tr key={i} className="hover:bg-gray-50/50">
-                                              <td className="p-4 font-medium">{row.order_id}</td>
-                                              <td className="p-4">{row.cargo_firm}</td>
-                                              {/* DESİ: Sadece sayı göster */}
-                                              <td className="p-4">{Number(row.desi).toLocaleString('tr-TR')}</td>
-                                              {/* FARK: Para birimi, Kırmızı ve Kalın */}
-                                              <td className="p-4 text-red-600 font-bold">{formatCurrency(row.price_diff)}</td>
+                                              <td className="p-4 font-medium">
+                                                  {row.order_id}
+                                                  <div className="text-xs text-gray-400 mt-1">{row.cargo_firm}</div>
+                                              </td>
+                                              <td className="p-4 text-gray-600 max-w-xs truncate" title={row.content}>
+                                                  {row.content}
+                                              </td>
+                                              <td className="p-4 text-center">
+                                                  <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">
+                                                    {Number(row.expected_desi).toLocaleString('tr-TR')} DS
+                                                  </span>
+                                              </td>
+                                              <td className="p-4 text-center">
+                                                  <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">
+                                                    {Number(row.billed_desi).toLocaleString('tr-TR')} DS
+                                                  </span>
+                                              </td>
+                                              <td className="p-4 text-right text-red-600 font-bold">
+                                                  {formatCurrency(row.price_diff)}
+                                              </td>
                                           </tr>
                                       ))}
                                   </tbody>
@@ -368,7 +391,6 @@ const Dashboard = ({ session }) => {
                        </div>
                    </div>
                 )}
-
                 {/* 5-8. DİĞER MODÜLLER (Standart) */}
                 {activeTab === 'ocr' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm border"><h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Veriler</h3><div className="space-y-3"><DetailRow label="Satıcı" value={data['Satıcı Adı']} /><DetailRow label="Tarih" value={data['Tarih']} /><DetailRow label="Fatura No" value={data['Fatura No']} /><DetailRow label="Tutar" value={data['Toplam Tutar']} highlight /></div></div><div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100"><h3 className="font-bold text-indigo-800 mb-2">Vergi Analizi</h3><p className="text-sm text-indigo-600 mb-4">{data['Aciklama']}</p><div className="bg-white p-4 rounded-lg shadow-sm"><div className="flex justify-between mb-2"><span>Matrah:</span> <b>{data['Mal Hizmet Tutarı']}</b></div><div className="flex justify-between"><span>KDV:</span> <b>{data['KDV Tutarı']}</b></div></div></div></div>}
                 {activeTab === 'bulk' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-8 text-center"><div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div><h2 className="text-2xl font-bold text-gray-800 mb-2">Tamamlandı</h2><p className="text-gray-500 mb-8">Veriler aktarıldı.</p><div className="grid grid-cols-3 gap-4 max-w-lg mx-auto"><StatCard label="Toplam" value={data.stats.total} /><StatCard label="Eklenen" value={data.stats.added} color="green" /><StatCard label="Mükerrer" value={data.stats.duplicates} color="red" /></div></div>}
