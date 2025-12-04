@@ -36,13 +36,12 @@ const fileToBase64 = (file) => {
 
           // Kaliteyi %70'e düşür (JPEG)
           const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          // data:image/jpeg;base64,... kısmını döndürür
           resolve(dataUrl);
         };
       };
       reader.onerror = error => reject(error);
     } 
-    // 2. Durum: PDF veya Excel (Sıkıştırılamaz, Boyut Kontrolü)
+    // 2. Durum: PDF veya Excel
     else {
       if (file.size > 4.5 * 1024 * 1024) { 
         alert("Dosya boyutu çok yüksek (Max 4.5MB).");
@@ -178,7 +177,6 @@ const Dashboard = ({ session }) => {
       
       if (['ocr', 'bulk', 'creative'].includes(activeTab)) {
         if (!selectedFile) { alert('Lütfen bir dosya seçin!'); setLoading(false); return; }
-        // Sıkıştırılmış veriyi al
         const base64File = await fileToBase64(selectedFile);
         bodyData.file_data = base64File;
         bodyData.file_name = selectedFile.name;
@@ -193,7 +191,6 @@ const Dashboard = ({ session }) => {
 
       const result = await response.json();
 
-      // HATA YÖNETİMİ (Mükerrer Kayıt vs.)
       if (!response.ok || result.status === 'duplicate' || result.status === 'error') {
          const msg = result.message || result.error || 'İşlem başarısız.';
          alert(msg);
@@ -211,7 +208,6 @@ const Dashboard = ({ session }) => {
     }
   };
 
-  // --- YENİ EKLENEN: Alım Faturası Yükleme Fonksiyonu ---
   const handlePurchaseUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -237,7 +233,6 @@ const Dashboard = ({ session }) => {
          alert(result.message || "Hata oluştu.");
        } else {
          alert("Alım faturası başarıyla işlendi ve stok maliyetleri güncellendi.");
-         // Maliyet tablosunu güncellemek için ana analizi tetikle
          handleTrigger();
        }
 
@@ -248,7 +243,6 @@ const Dashboard = ({ session }) => {
        setLoading(false);
     }
   };
-  // -------------------------------------------------------
 
   const fetchCfoReport = async () => {
     setCfoLoading(true);
@@ -304,7 +298,6 @@ const Dashboard = ({ session }) => {
               <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div><h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">{CONFIG[activeTab].title}</h2><p className="text-sm md:text-base text-gray-500 mt-1">{CONFIG[activeTab].desc}</p></div>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {/* YENİ EKLENEN: Maliyet Analizi İçin Excel Yükleme Butonu */}
                   {activeTab === 'cost' && (
                     <>
                       <input type="file" id="purchaseInput" className="hidden" accept=".xlsx,.xls" onChange={handlePurchaseUpload} disabled={loading} />
@@ -313,7 +306,6 @@ const Dashboard = ({ session }) => {
                       </label>
                     </>
                   )}
-                  
                   {activeTab === 'tax' && (<div className="flex items-center gap-2"><label className="text-xs text-gray-500 font-semibold whitespace-nowrap">Devr. KDV:</label><input type="number" className="border border-gray-300 rounded-lg px-3 py-2 w-full sm:w-24 focus:ring-2 focus:ring-cyan-500 outline-none" value={devredenKDV} onChange={(e) => setDevredenKDV(e.target.value)} /></div>)}
                   {['ocr', 'bulk', 'creative'].includes(activeTab) && (<div className="relative"><input type="file" id="fileInput" className="hidden" accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"} onChange={(e) => setSelectedFile(e.target.files[0])} /><label htmlFor="fileInput" className={`cursor-pointer flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-${CONFIG[activeTab].color}-500 hover:bg-gray-50 transition w-full`}>{selectedFile ? <span className="text-green-600 font-medium text-sm flex items-center gap-1"><CheckCircle size={14} /> Seçildi</span> : <span className="text-gray-500 text-sm flex items-center gap-1"><Upload size={14} /> Seç</span>}</label></div>)}
                   <button onClick={handleTrigger} disabled={loading} className={`flex justify-center items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium shadow-md transition transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed bg-${CONFIG[activeTab].color}-600 hover:bg-${CONFIG[activeTab].color}-700 w-full sm:w-auto`}><RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> {loading ? 'İşleniyor' : 'Başlat'}</button>
@@ -331,20 +323,55 @@ const Dashboard = ({ session }) => {
                 )}
                 {/* 2. ÖLÜ STOK */}
                 {activeTab === 'dead' && (
-                   <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex flex-col sm:flex-row justify-between items-center border border-red-100 text-center sm:text-left"><span className="font-semibold">Toplam Bağlı Sermaye</span><FormatDualCurrency tl={data.totalCapital} usd={data.totalCapitalUSD} /></div><SimpleTable headers={['KOD', 'ÜRÜN', 'ADET', 'TUTAR']} rows={data.list} keys={['kod', 'urun_adi', 'adet', 'bagli_para']} />{data.advice && (<div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"><h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> CFO Tavsiyesi</h4><div className="text-sm text-yellow-900 whitespace-pre-wrap">{data.advice}</div></div>)}</div></div>
+                   <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex flex-col sm:flex-row justify-between items-center border border-red-100 text-center sm:text-left"><span className="font-semibold">Toplam Bağlı Sermaye</span><FormatDualCurrency tl={data.totalCapital} usd={data.totalCapitalUSD} /></div><SimpleTable headers={['KOD', 'ÜRÜN', 'ADET', 'TUTAR']} rows={data.list} keys={['kod', 'urun_adi', 'adet', 'usd_bagli_para']} />{data.advice && (<div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"><h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> CFO Tavsiyesi</h4><div className="text-sm text-yellow-900 whitespace-pre-wrap">{data.advice}</div></div>)}</div></div>
                 )}
                 {/* 3. STOCKOUT */}
                 {activeTab === 'stockout' && (
                   <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6 text-sm" /><SimpleTable headers={['SKU', 'ÜRÜN ADI', 'SATIŞ HIZI (GÜN)', 'KALAN GÜN', 'DURUM']} rows={data.stockoutList} keys={['kod', 'urun_adi', 'hiz', 'gun', 'aciliyet']} /></div>
                 )}
-                {/* 4. KARGO */}
+                
+                {/* 4. KARGO (DÜZELTİLDİ) */}
                 {activeTab === 'cargo' && (
-                   <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-4"><div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div><div><p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p><h3 className="text-2xl font-bold text-red-600">{formatCurrency(cargoData.totalLoss)}</h3></div></div><div className="relative w-full md:w-64"><Search className="absolute left-3 top-2.5 text-gray-400" size={18} /><input type="text" placeholder="Filtrele..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} /></div></div><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><h3 className="font-bold text-gray-800 mb-4 text-sm md:text-base">Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3><div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">SİPARİŞ</th><th className="p-4">FİRMA</th><th className="p-4">DESİ</th><th className="p-4">FARK</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{cargoData.filtered.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4">{row.order_id}</td><td className="p-4">{row.cargo_firm}</td><td className="p-4">{row.desi.toLocaleString('tr-TR')}</td><td className="p-4 text-red-600 font-bold">{formatCurrency(row.price_diff)}</td></tr>))}</tbody></table></div></div></div>
+                   <div className="space-y-6">
+                      <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                          <div className="flex items-center gap-4"><div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div><div><p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p><h3 className="text-2xl font-bold text-red-600">{formatCurrency(cargoData.totalLoss)}</h3></div></div>
+                          <div className="relative w-full md:w-64"><Search className="absolute left-3 top-2.5 text-gray-400" size={18} /><input type="text" placeholder="Filtrele..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} /></div>
+                      </div>
+                      
+                      {/* ÖZEL MANUEL TABLO: Kesin kontrol için */}
+                      <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6">
+                          <h3 className="font-bold text-gray-800 mb-4 text-sm md:text-base">Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3>
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-left min-w-[500px]">
+                                  <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+                                      <tr>
+                                          <th className="p-4">SİPARİŞ</th>
+                                          <th className="p-4">FİRMA</th>
+                                          <th className="p-4">DESİ</th>
+                                          <th className="p-4">FARK</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100 text-sm">
+                                      {cargoData.filtered.map((row, i) => (
+                                          <tr key={i} className="hover:bg-gray-50/50">
+                                              <td className="p-4 font-medium">{row.order_id}</td>
+                                              <td className="p-4">{row.cargo_firm}</td>
+                                              {/* DESİ: Sadece sayı göster */}
+                                              <td className="p-4">{Number(row.desi).toLocaleString('tr-TR')}</td>
+                                              {/* FARK: Para birimi, Kırmızı ve Kalın */}
+                                              <td className="p-4 text-red-600 font-bold">{formatCurrency(row.price_diff)}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                       </div>
+                   </div>
                 )}
-                {/* 5. OCR, 6. BULK */}
+
+                {/* 5-8. DİĞER MODÜLLER (Standart) */}
                 {activeTab === 'ocr' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm border"><h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Veriler</h3><div className="space-y-3"><DetailRow label="Satıcı" value={data['Satıcı Adı']} /><DetailRow label="Tarih" value={data['Tarih']} /><DetailRow label="Fatura No" value={data['Fatura No']} /><DetailRow label="Tutar" value={data['Toplam Tutar']} highlight /></div></div><div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100"><h3 className="font-bold text-indigo-800 mb-2">Vergi Analizi</h3><p className="text-sm text-indigo-600 mb-4">{data['Aciklama']}</p><div className="bg-white p-4 rounded-lg shadow-sm"><div className="flex justify-between mb-2"><span>Matrah:</span> <b>{data['Mal Hizmet Tutarı']}</b></div><div className="flex justify-between"><span>KDV:</span> <b>{data['KDV Tutarı']}</b></div></div></div></div>}
                 {activeTab === 'bulk' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-8 text-center"><div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div><h2 className="text-2xl font-bold text-gray-800 mb-2">Tamamlandı</h2><p className="text-gray-500 mb-8">Veriler aktarıldı.</p><div className="grid grid-cols-3 gap-4 max-w-lg mx-auto"><StatCard label="Toplam" value={data.stats.total} /><StatCard label="Eklenen" value={data.stats.added} color="green" /><StatCard label="Mükerrer" value={data.stats.duplicates} color="red" /></div></div>}
-                {/* 7. VERGİ */}
                 {activeTab === 'tax' && (
                   <div className="space-y-6">
                     {data.tahminiAySonuCiro !== undefined && (
@@ -353,7 +380,6 @@ const Dashboard = ({ session }) => {
                     <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileBarChart size={20}/> CFO Gider Raporu</h3><button onClick={fetchCfoReport} disabled={cfoLoading} className="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200">{cfoLoading ? 'Yükleniyor...' : 'Raporu Getir'}</button></div>{cfoReport ? (<div className="space-y-4"><div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: cfoReport[0]?.data_summary }}></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">KATEGORİ</th><th className="p-4">İŞLEM ADEDİ</th><th className="p-4">TUTAR</th><th className="p-4">KDV</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{cfoReport.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4 font-medium">{row.Kategori}</td><td className="p-4">{row['İşlem Adedi']}</td><td className="p-4">{formatCurrency(row['Toplam Tutar'])}</td><td className="p-4">{formatCurrency(row['KDV Tutarı'])}</td></tr>))}</tbody></table></div></div>) : <p className="text-sm text-gray-400">Detaylı gider analizi için butona basın.</p>}</div>
                   </div>
                 )}
-                {/* 8. GÖRSEL */}
                 {activeTab === 'creative' && (<div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="md:col-span-1">{selectedFile && <div className="rounded-xl overflow-hidden border mb-4"><img src={URL.createObjectURL(selectedFile)} alt="Preview" className="w-full" /></div>}<div className={`text-center p-4 rounded-xl border ${creativeScore >= 7 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}><div className="text-4xl font-bold">{creativeScore}/10</div><div className="text-xs font-bold">PUAN</div></div></div><div className="md:col-span-2 bg-white rounded-xl shadow-sm border p-6 prose max-w-none"><h3 className="text-xl font-bold mb-4">Rapor</h3><div className="text-gray-600 text-sm whitespace-pre-line">{(data.text || JSON.stringify(data)).replace(/\*\*/g, '').replace(/###/g, '')}</div></div></div>)}
               </div>
             )}
@@ -367,13 +393,19 @@ const Dashboard = ({ session }) => {
 const MenuButton = ({ id, icon, label, activeTab, setActiveTab }) => (<button onClick={() => setActiveTab(id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${activeTab === id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>{icon} {label} {activeTab === id && <ChevronRight size={16} className="ml-auto" />}</button>);
 const StatCard = ({ label, value, color = 'gray' }) => (<div className={`bg-white p-4 rounded-lg shadow-sm border border-${color}-100`}><p className="text-xs text-gray-500 uppercase">{label}</p><p className={`text-lg font-bold text-${color}-600 mt-1`}>{typeof value === 'number' ? formatCurrency(value) : value}</p></div>);
 const DetailRow = ({ label, value, highlight }) => (<div className={`flex justify-between border-b border-gray-100 pb-2 ${highlight ? 'font-bold text-indigo-600' : 'text-sm text-gray-600'}`}><span>{label}:</span><span>{value}</span></div>);
+
+// Standart Tablo Bileşeni (Diğerleri için)
 const SimpleTable = ({ headers, rows, keys }) => (<div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr>{headers.map((h, i) => <th key={i} className="p-4">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 text-sm">{rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50">{keys.map((k, j) => {
   let val = row[k];
-  // Desi ve Hız sütunlarında TL simgesi olmasın
   const isNumber = typeof val === 'number';
   const isPlainNumber = k.toLowerCase().includes('desi') || k === 'gun' || k === 'hiz' || k === 'adet';
-  if (isNumber) val = isPlainNumber ? val.toLocaleString('tr-TR') : formatCurrency(val);
-  else if (k === 'usd_bagli_para' && row[k]) val = FormatDualCurrency({tl: row['bagli_para'], usd: row[k]}); // Özel durum
+  
+  // ÖLÜ STOK ÖZEL DURUMU: Tutar sütununda hem TL hem USD göster
+  if (k === 'usd_bagli_para' && row[k]) {
+     val = <FormatDualCurrency tl={row['bagli_para']} usd={row[k]} />;
+  } else if (isNumber) {
+     val = isPlainNumber ? val.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : formatCurrency(val);
+  }
   return <td key={j} className="p-4">{val}</td>;
 })}</tr>))}</tbody></table></div>);
 
