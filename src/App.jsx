@@ -4,7 +4,7 @@ import {
   LayoutDashboard, TrendingUp, AlertTriangle, PackageX, 
   LogOut, RefreshCw, Truck, FileText, Upload, 
   Calculator, Camera, Download, ChevronRight, CheckCircle, Search,
-  Menu, X, Mail, FileBarChart, Wallet // Cüzdan ikonu eklendi
+  Menu, X, Mail, FileBarChart, Wallet // Wallet ikonu eklendi
 } from 'lucide-react';
 
 // --- YARDIMCI: Dosyayı Base64'e Çevir ---
@@ -113,7 +113,7 @@ const Login = () => {
 
 // --- ANA DASHBOARD ---
 const Dashboard = ({ session }) => {
-  const [activeTab, setActiveTab] = useState('finance'); // Varsayılanı finance yapabiliriz veya cost
+  const [activeTab, setActiveTab] = useState('finance'); // Varsayılan Finance olarak açılır
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -125,14 +125,10 @@ const Dashboard = ({ session }) => {
   const [selectedFile, setSelectedFile] = useState(null); 
   const [devredenKDV, setDevredenKDV] = useState(0); 
   const [cargoFilter, setCargoFilter] = useState('');
-
-  // Finance (Mutabakat) Filtreleme
   const [financeFilter, setFinanceFilter] = useState('');
 
   const CONFIG = {
-    // YENİ EKLENEN MODÜL (EN BAŞTA)
     finance: { title: 'Cari Mutabakat', desc: 'Pazaryeri hakediş ve ödeme kontrolü.', url: 'https://n8n.lolie.com.tr/webhook/finance-audit', color: 'emerald' },
-    
     cost: { title: 'Maliyet Analizi', desc: 'Ürün bazlı karlılık ve gider analizi.', url: 'https://n8n.lolie.com.tr/webhook/maliyet-analizi', color: 'blue' },
     dead: { title: 'Ölü Stok Analizi', desc: 'Satılmayan ürünler ve CFO raporu.', url: 'https://n8n.lolie.com.tr/webhook/deadstock', color: 'red' },
     stockout: { title: 'Stok Tükenme Riski', desc: 'Kritik seviyedeki ürünler.', url: 'https://n8n.lolie.com.tr/webhook/stockout-api', color: 'amber' },
@@ -153,7 +149,7 @@ const Dashboard = ({ session }) => {
     setMobileMenuOpen(false);
   }, [activeTab]);
 
-  // Kargo Filtreleme
+  // --- FİLTRELEME MANTIKLARI ---
   const cargoData = useMemo(() => {
     if (activeTab !== 'cargo' || !data?.my_results) return { filtered: [], totalLoss: 0 };
     const filtered = data.my_results.filter(item => item.cargo_firm.toLowerCase().includes(cargoFilter.toLowerCase()) || item.order_id.toLowerCase().includes(cargoFilter.toLowerCase()));
@@ -161,19 +157,22 @@ const Dashboard = ({ session }) => {
     return { filtered, totalLoss };
   }, [data, cargoFilter, activeTab]);
 
-  // Finans Filtreleme (YENİ)
   const financeData = useMemo(() => {
     if (activeTab !== 'finance' || !data) return [];
-    // Data array değilse boş dön
     if(!Array.isArray(data)) return [];
-    
     return data.filter(item => 
        item.order_number.toLowerCase().includes(financeFilter.toLowerCase()) ||
        item.mutabakat_durumu.toLowerCase().includes(financeFilter.toLowerCase())
     );
   }, [data, financeFilter, activeTab]);
 
-  // Kreatif Puanı
+  const financeSummary = useMemo(() => {
+     if (activeTab !== 'finance' || !data || !Array.isArray(data)) return { totalMissing: 0, count: 0 };
+     const missingItems = data.filter(i => i.mutabakat_durumu.includes('EKSİK'));
+     const total = missingItems.reduce((acc, i) => acc + (Number(i.fark) || 0), 0);
+     return { totalMissing: total, count: missingItems.length };
+  }, [data, activeTab]);
+
   const creativeScore = useMemo(() => {
     if (activeTab !== 'creative' || !data) return 0;
     if (data.score) return parseInt(data.score);
@@ -187,9 +186,7 @@ const Dashboard = ({ session }) => {
     setData(null);
     try {
       let bodyData = { targetUrl: CONFIG[activeTab].url, user_id: session.user.id, email: session.user.email };
-      
       if (activeTab === 'tax') bodyData.devreden_kdv = devredenKDV;
-      
       if (['ocr', 'bulk', 'creative'].includes(activeTab)) {
         if (!selectedFile) { alert('Lütfen bir dosya seçin!'); setLoading(false); return; }
         const base64File = await fileToBase64(selectedFile);
@@ -197,33 +194,13 @@ const Dashboard = ({ session }) => {
         bodyData.file_name = selectedFile.name;
         if(activeTab === 'creative') bodyData.image = base64File;
       }
-
-      const response = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyData)
-      });
-
+      const response = await fetch('/api/proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
+      if (!response.ok) throw new Error('Sunucu hatası');
       const result = await response.json();
-
-      if (!response.ok || result.status === 'duplicate' || result.status === 'error') {
-         const msg = result.message || result.error || 'İşlem başarısız.';
-         alert(msg);
-         setLoading(false);
-         return; 
-      }
-
       setData(result.data || result);
-
-    } catch (error) {
-      console.error(error);
-      alert('Bağlantı hatası.');
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error(error); alert('İşlem başarısız.'); } finally { setLoading(false); }
   };
 
-  // ... (Diğer fonksiyonlar aynı: handlePurchaseUpload, fetchCfoReport, sendDailyMail) ...
   const handlePurchaseUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -233,20 +210,14 @@ const Dashboard = ({ session }) => {
        const response = await fetch('/api/proxy', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-               targetUrl: 'https://n8n.lolie.com.tr/webhook/bulk-purchase-upload',
-               user_id: session.user.id,
-               email: session.user.email,
-               file_data: base64File,
-               file_name: file.name
-           })
+           body: JSON.stringify({ targetUrl: 'https://n8n.lolie.com.tr/webhook/bulk-purchase-upload', user_id: session.user.id, email: session.user.email, file_data: base64File, file_name: file.name })
        });
        const result = await response.json();
        if (!response.ok || result.status === 'error') { alert(result.message || "Hata oluştu."); } 
        else { alert("Alım faturası başarıyla işlendi."); handleTrigger(); }
     } catch (err) { console.error(err); alert("Dosya yüklenirken hata oluştu."); } finally { setLoading(false); }
   };
-  
+
   const fetchCfoReport = async () => {
     setCfoLoading(true);
     try {
@@ -255,7 +226,7 @@ const Dashboard = ({ session }) => {
       setCfoReport(Array.isArray(result) ? result : [result]);
     } catch (e) { alert("CFO raporu alınamadı."); } finally { setCfoLoading(false); }
   };
-  
+
   const sendDailyMail = async () => {
     setMailSending(true);
     try {
@@ -267,9 +238,7 @@ const Dashboard = ({ session }) => {
   const renderMenuItems = () => (
     <>
       <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Analizler</p>
-      {/* YENİ BUTON BURAYA EKLENDİ */}
       <MenuButton id="finance" icon={<Wallet size={18} />} label="Cari Mutabakat" activeTab={activeTab} setActiveTab={setActiveTab} />
-      
       <MenuButton id="cost" icon={<TrendingUp size={18} />} label="Maliyet Analizi" activeTab={activeTab} setActiveTab={setActiveTab} />
       <MenuButton id="dead" icon={<PackageX size={18} />} label="Ölü Stok Analizi" activeTab={activeTab} setActiveTab={setActiveTab} />
       <MenuButton id="stockout" icon={<AlertTriangle size={18} />} label="Kritik Stoklar" activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -304,12 +273,7 @@ const Dashboard = ({ session }) => {
               <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div><h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">{CONFIG[activeTab].title}</h2><p className="text-sm md:text-base text-gray-500 mt-1">{CONFIG[activeTab].desc}</p></div>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {activeTab === 'cost' && (
-                    <>
-                      <input type="file" id="purchaseInput" className="hidden" accept=".xlsx,.xls" onChange={handlePurchaseUpload} disabled={loading} />
-                      <label htmlFor="purchaseInput" className={`cursor-pointer flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-green-500 hover:bg-green-50 hover:text-green-700 transition w-full sm:w-auto`}><Upload size={16} /> Alım Faturası Yükle</label>
-                    </>
-                  )}
+                  {activeTab === 'cost' && (<><input type="file" id="purchaseInput" className="hidden" accept=".xlsx,.xls" onChange={handlePurchaseUpload} disabled={loading} /><label htmlFor="purchaseInput" className={`cursor-pointer flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-green-500 hover:bg-green-50 hover:text-green-700 transition w-full sm:w-auto`}><Upload size={16} /> Alım Faturası Yükle</label></>)}
                   {activeTab === 'tax' && (<div className="flex items-center gap-2"><label className="text-xs text-gray-500 font-semibold whitespace-nowrap">Devr. KDV:</label><input type="number" className="border border-gray-300 rounded-lg px-3 py-2 w-full sm:w-24 focus:ring-2 focus:ring-cyan-500 outline-none" value={devredenKDV} onChange={(e) => setDevredenKDV(e.target.value)} /></div>)}
                   {['ocr', 'bulk', 'creative'].includes(activeTab) && (<div className="relative"><input type="file" id="fileInput" className="hidden" accept={activeTab === 'bulk' ? ".xlsx,.xls" : "image/*,.pdf"} onChange={(e) => setSelectedFile(e.target.files[0])} /><label htmlFor="fileInput" className={`cursor-pointer flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 hover:border-${CONFIG[activeTab].color}-500 hover:bg-gray-50 transition w-full`}>{selectedFile ? <span className="text-green-600 font-medium text-sm flex items-center gap-1"><CheckCircle size={14} /> Seçildi</span> : <span className="text-gray-500 text-sm flex items-center gap-1"><Upload size={14} /> Seç</span>}</label></div>)}
                   <button onClick={handleTrigger} disabled={loading} className={`flex justify-center items-center gap-2 px-6 py-2.5 rounded-lg text-white font-medium shadow-md transition transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed bg-${CONFIG[activeTab].color}-600 hover:bg-${CONFIG[activeTab].color}-700 w-full sm:w-auto`}><RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> {loading ? 'İşleniyor' : 'Başlat'}</button>
@@ -322,14 +286,27 @@ const Dashboard = ({ session }) => {
             {data && (
               <div className="animate-fade-in-up space-y-6">
                 
-                {/* 9. CARI MUTABAKAT (YENİ MODÜL) */}
+                {/* --- YENİ: CARI MUTABAKAT KISMI --- */}
                 {activeTab === 'finance' && (
                    <div className="space-y-6">
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                          <div className="flex items-center gap-2">
-                              <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full"><Wallet size={24}/></div>
-                              <h3 className="text-lg font-bold text-gray-800">Hakediş Kontrol Paneli</h3>
+                          <div className="flex items-center gap-4 w-full md:w-auto">
+                              <div className={`p-3 rounded-full ${financeSummary.totalMissing > 0 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                  {financeSummary.totalMissing > 0 ? <AlertTriangle size={24}/> : <CheckCircle size={24}/>}
+                              </div>
+                              <div>
+                                  <p className="text-xs text-gray-500 uppercase font-bold">
+                                      {financeSummary.totalMissing > 0 ? 'Eksik Yatan Tutar' : 'Tüm Ödemeler Tam'}
+                                  </p>
+                                  <h3 className={`text-2xl font-bold ${financeSummary.totalMissing > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      {formatCurrency(financeSummary.totalMissing)}
+                                  </h3>
+                                  {financeSummary.totalMissing > 0 && (
+                                      <p className="text-xs text-gray-400">{financeSummary.count} siparişte eksik tespit edildi.</p>
+                                  )}
+                              </div>
                           </div>
+                          
                           <div className="relative w-full md:w-64">
                               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
                               <input type="text" placeholder="Sipariş No veya Durum ara..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" value={financeFilter} onChange={(e) => setFinanceFilter(e.target.value)} />
@@ -377,13 +354,11 @@ const Dashboard = ({ session }) => {
                    </div>
                 )}
 
-                {/* ... (1-4. Modüller Aynen Kaldı) ... */}
+                {/* ... (Diğer Modüller) ... */}
                 {activeTab === 'cost' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6"><StatCard label="Oran" value={`%${(data.stats.ratio*100).toFixed(1)}`} color="blue" /><StatCard label="Gider" value={data.stats.totalExp} /><StatCard label="Ciro" value={data.stats.totalRev} /></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">SKU</th><th className="p-4">Ürün</th><th className="p-4">Ham Mal.</th><th className="p-4">Yüklü Mal.</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{data.rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4 font-medium">{row.sku}</td><td className="p-4">{row.name}</td><td className="p-4"><FormatDualCurrency tl={row.cost} usd={row.usd_cost} /></td><td className="p-4"><FormatDualCurrency tl={row.loaded_cost} usd={row.usd_loaded_cost} /></td></tr>))}</tbody></table></div></div>}
                 {activeTab === 'dead' && <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex flex-col sm:flex-row justify-between items-center border border-red-100 text-center sm:text-left"><span className="font-semibold">Toplam Bağlı Sermaye</span><FormatDualCurrency tl={data.totalCapital} usd={data.totalCapitalUSD} /></div><SimpleTable headers={['KOD', 'ÜRÜN', 'ADET', 'TUTAR']} rows={data.list} keys={['kod', 'urun_adi', 'adet', 'usd_bagli_para']} />{data.advice && (<div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"><h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> CFO Tavsiyesi</h4><div className="text-sm text-yellow-900 whitespace-pre-wrap">{data.advice}</div></div>)}</div></div>}
                 {activeTab === 'stockout' && <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6 text-sm" /><SimpleTable headers={['SKU', 'ÜRÜN ADI', 'SATIŞ HIZI (GÜN)', 'KALAN GÜN', 'DURUM']} rows={data.stockoutList} keys={['kod', 'urun_adi', 'hiz', 'gun', 'aciliyet']} /></div>}
                 {activeTab === 'cargo' && <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex items-center gap-4"><div className="p-3 bg-red-100 text-red-600 rounded-full"><AlertTriangle size={24}/></div><div><p className="text-xs text-gray-500 uppercase font-bold">Toplam Zarar</p><h3 className="text-2xl font-bold text-red-600">{formatCurrency(cargoData.totalLoss)}</h3></div></div><div className="relative w-full md:w-64"><Search className="absolute left-3 top-2.5 text-gray-400" size={18} /><input type="text" placeholder="Filtrele..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={cargoFilter} onChange={(e) => setCargoFilter(e.target.value)} /></div></div><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><h3 className="font-bold text-gray-800 mb-4 text-sm md:text-base">Kargo Tutarsızlıkları ({cargoData.filtered.length})</h3><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">SİPARİŞ</th><th className="p-4">İÇERİK</th><th className="p-4 text-center">BEKLENEN</th><th className="p-4 text-center">KESİLEN</th><th className="p-4 text-right">FARK (ZARAR)</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{cargoData.filtered.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4 font-medium">{row.order_id}<div className="text-xs text-gray-400 mt-1">{row.cargo_firm}</div></td><td className="p-4 text-gray-600 max-w-xs truncate" title={row.content}>{row.content}</td><td className="p-4 text-center"><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">{Number(row.expected_desi).toLocaleString('tr-TR')} DS</span></td><td className="p-4 text-center"><span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">{Number(row.billed_desi).toLocaleString('tr-TR')} DS</span></td><td className="p-4 text-right text-red-600 font-bold">{formatCurrency(row.price_diff)}</td></tr>))}</tbody></table></div></div></div>}
-
-                {/* 5-8. DİĞER MODÜLLER (Standart) */}
                 {activeTab === 'ocr' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm border"><h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Veriler</h3><div className="space-y-3"><DetailRow label="Satıcı" value={data['Satıcı Adı']} /><DetailRow label="Tarih" value={data['Tarih']} /><DetailRow label="Fatura No" value={data['Fatura No']} /><DetailRow label="Tutar" value={data['Toplam Tutar']} highlight /></div></div><div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100"><h3 className="font-bold text-indigo-800 mb-2">Vergi Analizi</h3><p className="text-sm text-indigo-600 mb-4">{data['Aciklama']}</p><div className="bg-white p-4 rounded-lg shadow-sm"><div className="flex justify-between mb-2"><span>Matrah:</span> <b>{data['Mal Hizmet Tutarı']}</b></div><div className="flex justify-between"><span>KDV:</span> <b>{data['KDV Tutarı']}</b></div></div></div></div>}
                 {activeTab === 'bulk' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-8 text-center"><div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div><h2 className="text-2xl font-bold text-gray-800 mb-2">Tamamlandı</h2><p className="text-gray-500 mb-8">Veriler aktarıldı.</p><div className="grid grid-cols-3 gap-4 max-w-lg mx-auto"><StatCard label="Toplam" value={data.stats.total} isCurrency={false} /><StatCard label="Eklenen" value={data.stats.added} color="green" isCurrency={false} /><StatCard label="Mükerrer" value={data.stats.duplicates} color="red" isCurrency={false} /></div></div>}
                 {activeTab === 'tax' && (
@@ -405,38 +380,14 @@ const Dashboard = ({ session }) => {
 };
 
 const MenuButton = ({ id, icon, label, activeTab, setActiveTab }) => (<button onClick={() => setActiveTab(id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${activeTab === id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>{icon} {label} {activeTab === id && <ChevronRight size={16} className="ml-auto" />}</button>);
-
-// GÜNCELLENMİŞ STATCARD (Para Birimi Kontrollü)
-const StatCard = ({ label, value, color = 'gray', isCurrency = true }) => (
-  <div className={`bg-white p-4 rounded-lg shadow-sm border border-${color}-100`}>
-    <p className="text-xs text-gray-500 uppercase">{label}</p>
-    <p className={`text-lg font-bold text-${color}-600 mt-1`}>
-      {typeof value === 'number' && isCurrency ? formatCurrency(value) : value}
-    </p>
-  </div>
-);
-
+const StatCard = ({ label, value, color = 'gray', isCurrency = true }) => (<div className={`bg-white p-4 rounded-lg shadow-sm border border-${color}-100`}><p className="text-xs text-gray-500 uppercase">{label}</p><p className={`text-lg font-bold text-${color}-600 mt-1`}>{typeof value === 'number' && isCurrency ? formatCurrency(value) : value}</p></div>);
 const DetailRow = ({ label, value, highlight }) => (<div className={`flex justify-between border-b border-gray-100 pb-2 ${highlight ? 'font-bold text-indigo-600' : 'text-sm text-gray-600'}`}><span>{label}:</span><span>{value}</span></div>);
-
-// Standart Tablo (Para Birimi Kontrollü)
 const SimpleTable = ({ headers, rows, keys }) => (<div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr>{headers.map((h, i) => <th key={i} className="p-4">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 text-sm">{rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50">{keys.map((k, j) => {
   let val = row[k];
   const isNumber = typeof val === 'number';
   const isPlainNumber = k.toLowerCase().includes('desi') || k === 'gun' || k === 'hiz' || k === 'adet' || k === 'işlem adedi';
-  
-  if (k === 'usd_bagli_para' && row[k]) {
-     val = <FormatDualCurrency tl={row['bagli_para']} usd={row[k]} />;
-  } else if (isNumber) {
-     if (isPlainNumber) {
-        val = val.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
-     } else {
-        // Veritabanından currency varsa onu kullan, yoksa TL
-        let code = 'TRY';
-        if (row.currency === 'USD' || row.currency === '$') code = 'USD';
-        else if (row.currency === 'EUR' || row.currency === '€') code = 'EUR';
-        val = val.toLocaleString('tr-TR', { style: 'currency', currency: code });
-     }
-  }
+  if (k === 'usd_bagli_para' && row[k]) { val = <FormatDualCurrency tl={row['bagli_para']} usd={row[k]} />; }
+  else if (isNumber) { val = isPlainNumber ? val.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : formatCurrency(val); }
   return <td key={j} className="p-4">{val}</td>;
 })}</tr>))}</tbody></table></div>);
 
