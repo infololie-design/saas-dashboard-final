@@ -152,7 +152,7 @@ const Dashboard = ({ session }) => {
     const filtered = data.my_results.filter(item => 
       item.cargo_firm.toLowerCase().includes(cargoFilter.toLowerCase()) ||
       item.order_id.toLowerCase().includes(cargoFilter.toLowerCase()) ||
-      (item.content && item.content.toLowerCase().includes(cargoFilter.toLowerCase())) // İçerikte de ara
+      (item.content && item.content.toLowerCase().includes(cargoFilter.toLowerCase()))
     );
     const totalLoss = filtered.reduce((acc, item) => acc + (Number(item.price_diff) || 0), 0);
     return { filtered, totalLoss };
@@ -195,11 +195,47 @@ const Dashboard = ({ session }) => {
         bodyData.file_name = selectedFile.name;
         if(activeTab === 'creative') bodyData.image = base64File;
       }
-      const response = await fetch('/api/proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
-      if (!response.ok) throw new Error('Sunucu hatası');
+
+      const response = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData)
+      });
+
       const result = await response.json();
+
+      // --- HATA YÖNETİMİ (DÜZELTİLDİ: Dizi İçindeki Hatayı da Yakalar) ---
+      const isError = !response.ok || 
+                      result.status === 'error' || 
+                      result.status === 'duplicate' ||
+                      result.error || 
+                      (Array.isArray(result) && result[0] && (result[0].status === 'error' || result[0].error));
+
+      if (isError) {
+         let errorMsg = result.message || result.error;
+         
+         // Dizi içinden hata mesajını çıkar
+         if (Array.isArray(result) && result[0]) {
+             errorMsg = result[0].message || result[0].error || "Bilinmeyen hata";
+         }
+         
+         if (errorMsg && (String(errorMsg).includes('duplicate') || String(errorMsg).includes('zaten kayıtlı'))) {
+             alert("⚠️ DİKKAT: Bu fatura numarası zaten sistemde kayıtlı!");
+         } else {
+             alert("İşlem başarısız: " + (errorMsg || "Hata"));
+         }
+         setLoading(false);
+         return; 
+      }
+      // -------------------------------------
+
       setData(result.data || result);
-    } catch (error) { console.error(error); alert('İşlem başarısız.'); } finally { setLoading(false); }
+    } catch (error) {
+      console.error(error);
+      alert('Bağlantı hatası.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePurchaseUpload = async (e) => {
@@ -287,7 +323,7 @@ const Dashboard = ({ session }) => {
             {data && (
               <div className="animate-fade-in-up space-y-6">
                 
-                {/* CARI MUTABAKAT (KORUNDU) */}
+                {/* CARI MUTABAKAT */}
                 {activeTab === 'finance' && (
                    <div className="space-y-6">
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -309,12 +345,14 @@ const Dashboard = ({ session }) => {
 
                 {/* MALİYET */}
                 {activeTab === 'cost' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6"><StatCard label="Oran" value={`%${(data.stats.ratio*100).toFixed(1)}`} color="blue" /><StatCard label="Gider" value={data.stats.totalExp} /><StatCard label="Ciro" value={data.stats.totalRev} /></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[500px]"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold"><tr><th className="p-4">SKU</th><th className="p-4">Ürün</th><th className="p-4">Ham Mal.</th><th className="p-4">Yüklü Mal.</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{data.rows?.map((row, i) => (<tr key={i} className="hover:bg-gray-50/50"><td className="p-4 font-medium">{row.sku}</td><td className="p-4">{row.name}</td><td className="p-4"><FormatDualCurrency tl={row.cost} usd={row.usd_cost} /></td><td className="p-4"><FormatDualCurrency tl={row.loaded_cost} usd={row.usd_loaded_cost} /></td></tr>))}</tbody></table></div></div>}
+                
                 {/* ÖLÜ STOK */}
                 {activeTab === 'dead' && <div className="space-y-6"><div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex flex-col sm:flex-row justify-between items-center border border-red-100 text-center sm:text-left"><span className="font-semibold">Toplam Bağlı Sermaye</span><FormatDualCurrency tl={data.totalCapital} usd={data.totalCapitalUSD} /></div><SimpleTable headers={['KOD', 'ÜRÜN', 'ADET', 'TUTAR']} rows={data.list} keys={['kod', 'urun_adi', 'adet', 'usd_bagli_para']} />{data.advice && (<div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"><h4 className="font-bold text-yellow-800 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> CFO Tavsiyesi</h4><div className="text-sm text-yellow-900 whitespace-pre-wrap">{data.advice}</div></div>)}</div></div>}
+                
                 {/* STOCKOUT */}
                 {activeTab === 'stockout' && <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div dangerouslySetInnerHTML={{ __html: data.advice }} className="mb-6 text-sm" /><SimpleTable headers={['SKU', 'ÜRÜN ADI', 'SATIŞ HIZI (GÜN)', 'KALAN GÜN', 'DURUM']} rows={data.stockoutList} keys={['kod', 'urun_adi', 'hiz', 'gun', 'aciliyet']} /></div>}
                 
-                {/* KARGO (GÜNCELLENDİ: DETAYLI TABLO) */}
+                {/* KARGO (DETAYLI) */}
                 {activeTab === 'cargo' && (
                    <div className="space-y-6">
                       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -325,9 +363,13 @@ const Dashboard = ({ session }) => {
                    </div>
                 )}
 
-                {/* OCR, BULK, TAX, CREATIVE */}
+                {/* OCR */}
                 {activeTab === 'ocr' && <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-xl shadow-sm border"><h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Veriler</h3><div className="space-y-3"><DetailRow label="Satıcı" value={data['Satıcı Adı']} /><DetailRow label="Tarih" value={data['Tarih']} /><DetailRow label="Fatura No" value={data['Fatura No']} /><DetailRow label="Tutar" value={data['Toplam Tutar']} highlight /></div></div><div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100"><h3 className="font-bold text-indigo-800 mb-2">Vergi Analizi</h3><p className="text-sm text-indigo-600 mb-4">{data['Aciklama']}</p><div className="bg-white p-4 rounded-lg shadow-sm"><div className="flex justify-between mb-2"><span>Matrah:</span> <b>{data['Mal Hizmet Tutarı']}</b></div><div className="flex justify-between"><span>KDV:</span> <b>{data['KDV Tutarı']}</b></div></div></div></div>}
+                
+                {/* BULK */}
                 {activeTab === 'bulk' && data.stats && <div className="bg-white rounded-xl shadow-sm border p-8 text-center"><div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4"><CheckCircle size={48} /></div><h2 className="text-2xl font-bold text-gray-800 mb-2">Tamamlandı</h2><p className="text-gray-500 mb-8">Veriler aktarıldı.</p><div className="grid grid-cols-3 gap-4 max-w-lg mx-auto"><StatCard label="Toplam" value={data.stats.total} isCurrency={false} /><StatCard label="Eklenen" value={data.stats.added} color="green" isCurrency={false} /><StatCard label="Mükerrer" value={data.stats.duplicates} color="red" isCurrency={false} /></div></div>}
+                
+                {/* TAX */}
                 {activeTab === 'tax' && (
                   <div className="space-y-6">
                     {data.tahminiAySonuCiro !== undefined && (
@@ -336,6 +378,8 @@ const Dashboard = ({ session }) => {
                     <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6"><div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileBarChart size={20}/> CFO Gider Raporu</h3><button onClick={fetchCfoReport} disabled={cfoLoading} className="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200">{cfoLoading ? 'Yükleniyor...' : 'Raporu Getir'}</button></div>{cfoReport ? (<div className="space-y-4"><div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: cfoReport[0]?.data_summary }}></div><SimpleTable headers={['Kategori', 'İşlem', 'Tutar', 'KDV']} rows={cfoReport} keys={['Kategori', 'İşlem Adedi', 'Toplam Tutar', 'KDV Tutarı']} /></div>) : <p className="text-sm text-gray-400">Detaylı gider analizi için butona basın.</p>}</div>
                   </div>
                 )}
+                
+                {/* CREATIVE */}
                 {activeTab === 'creative' && (<div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="md:col-span-1">{selectedFile && <div className="rounded-xl overflow-hidden border mb-4"><img src={URL.createObjectURL(selectedFile)} alt="Preview" className="w-full" /></div>}<div className={`text-center p-4 rounded-xl border ${creativeScore >= 7 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}><div className="text-4xl font-bold">{creativeScore}/10</div><div className="text-xs font-bold">PUAN</div></div></div><div className="md:col-span-2 bg-white rounded-xl shadow-sm border p-6 prose max-w-none"><h3 className="text-xl font-bold mb-4">Rapor</h3><div className="text-gray-600 text-sm whitespace-pre-line">{(data.text || JSON.stringify(data)).replace(/\*\*/g, '').replace(/###/g, '')}</div></div></div>)}
               </div>
             )}
@@ -354,7 +398,16 @@ const SimpleTable = ({ headers, rows, keys }) => (<div className="overflow-x-aut
   const isNumber = typeof val === 'number';
   const isPlainNumber = k.toLowerCase().includes('desi') || k === 'gun' || k === 'hiz' || k === 'adet' || k === 'işlem adedi';
   if (k === 'usd_bagli_para' && row[k]) { val = <FormatDualCurrency tl={row['bagli_para']} usd={row[k]} />; }
-  else if (isNumber) { val = isPlainNumber ? val.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : formatCurrency(val); }
+  else if (isNumber) { 
+      if (isPlainNumber) {
+          val = val.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+      } else {
+          let code = 'TRY';
+          if (row.currency === 'USD' || row.currency === '$') code = 'USD';
+          else if (row.currency === 'EUR' || row.currency === '€') code = 'EUR';
+          val = val.toLocaleString('tr-TR', { style: 'currency', currency: code });
+      }
+  }
   return <td key={j} className="p-4">{val}</td>;
 })}</tr>))}</tbody></table></div>);
 
